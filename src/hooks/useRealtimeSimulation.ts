@@ -254,7 +254,7 @@ export function useCollaborativeDesign(designId: string | null, userId: string, 
 
         ws.onclose = () => setIsConnected(false);
         wsRef.current = ws;
-    }, [designId, userId, wsUrl]);
+    }, [designId, userId, wsUrl, token]);
 
     const sendCursorPosition = useCallback((x: number, y: number) => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {

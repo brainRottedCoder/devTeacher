@@ -370,7 +370,7 @@ if (typeof window !== "undefined") {
     });
 }
 
-export default {
+const indexedDBService = {
     initDB,
     isOnline,
     syncOfflineData,
@@ -388,3 +388,5 @@ export default {
     addToSyncQueue,
     getPendingSyncItems,
 };
+
+export default indexedDBService;

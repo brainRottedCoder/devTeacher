@@ -60,7 +60,6 @@ app.get('/health', (_req: Request, res: Response) => {
         uptime: process.uptime(),
     });
 });
-
 app.get('/ready', async (_req: Request, res: Response) => {
     if (!supabase) {
         return res.status(503).json({ status: 'not ready', reason: 'Database not configured' });

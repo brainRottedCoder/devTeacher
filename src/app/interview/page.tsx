@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { MainLayout } from "@/components/MainLayout";
 import { useCompanies, useQuestions, useStudyPlans } from "@/hooks/useInterview";
 import {
@@ -133,9 +134,11 @@ export default function InterviewPage() {
                                                             }`}
                                                     >
                                                         {company.logo_url ? (
-                                                            <img
+                                                            <Image
                                                                 src={company.logo_url}
                                                                 alt={company.name}
+                                                                width={24}
+                                                                height={24}
                                                                 className="w-6 h-6 rounded"
                                                             />
                                                         ) : (

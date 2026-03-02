@@ -35,8 +35,6 @@ function getOpenAI() {
     }
     return openai;
 }
-
-// Request validation schemas
 const chatSchema = z.object({
     message: z.string().min(1),
     context: z.object({
@@ -227,7 +225,7 @@ app.post('/api/embeddings/batch', async (req: Request, res: Response) => {
                 input: batch,
             });
             
-            embeddings.push(...response.data.map(d => d.embedding));
+            embeddings.push(...response.data.map((d: { embedding: number[] }) => d.embedding));
         }
         
         logger.info('Batch embeddings generated', { textCount: texts.length });

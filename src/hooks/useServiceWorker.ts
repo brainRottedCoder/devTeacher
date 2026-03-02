@@ -22,6 +22,26 @@ export function useServiceWorker(): UseServiceWorkerReturn {
     const [updateAvailable, setUpdateAvailable] = useState(false);
     const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null);
 
+    // Send message to service worker and get response
+    const getMessageResponse = useCallback((type: string, data?: any): Promise<any> => {
+        return new Promise((resolve) => {
+            if (!navigator.serviceWorker.controller) {
+                resolve(null);
+                return;
+            }
+
+            const channel = new MessageChannel();
+            channel.port1.onmessage = (event) => {
+                resolve(event.data);
+            };
+
+            navigator.serviceWorker.controller.postMessage(
+                { type, data },
+                [channel.port2]
+            );
+        });
+    }, []);
+
     // Register service worker
     const registerSW = useCallback(async () => {
         if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
@@ -78,27 +98,7 @@ export function useServiceWorker(): UseServiceWorkerReturn {
         } catch (error) {
             console.error("[SW] Registration failed:", error);
         }
-    }, []);
-
-    // Send message to service worker and get response
-    const getMessageResponse = useCallback((type: string, data?: any): Promise<any> => {
-        return new Promise((resolve) => {
-            if (!navigator.serviceWorker.controller) {
-                resolve(null);
-                return;
-            }
-
-            const channel = new MessageChannel();
-            channel.port1.onmessage = (event) => {
-                resolve(event.data);
-            };
-
-            navigator.serviceWorker.controller.postMessage(
-                { type, data },
-                [channel.port2]
-            );
-        });
-    }, []);
+    }, [getMessageResponse]);
 
     // Update service worker
     const updateSW = useCallback(() => {

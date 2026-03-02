@@ -12,12 +12,10 @@ const XP_REWARDS: Record<string, number> = {
     design: 80,
     community: 120,
 };
-
 async function getAuthUser(supabase: any) {
     const { data: { session } } = await supabase.auth.getSession();
     return session?.user ?? null;
 }
-
 // Update streak server-side and return updated value
 async function updateStreak(supabase: any, userId: string): Promise<number> {
     const { data: userData } = await (supabase.from("profiles") as any)

@@ -60,6 +60,30 @@ export function useVoiceRecording(options: UseVoiceRecordingOptions = {}) {
         }
     }, []);
 
+    // Stop recording
+    const stopRecording = useCallback(() => {
+        if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+        }
+
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stop();
+        }
+
+        // Stop all tracks
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+        }
+
+        setState(prev => ({
+            ...prev,
+            isRecording: false,
+            isPaused: false,
+        }));
+    }, []);
+
     // Start recording
     const startRecording = useCallback(async () => {
         try {
@@ -138,31 +162,7 @@ export function useVoiceRecording(options: UseVoiceRecordingOptions = {}) {
             setState(prev => ({ ...prev, error: message }));
             config.onError?.(new Error(message));
         }
-    }, [config]);
-
-    // Stop recording
-    const stopRecording = useCallback(() => {
-        if (timerRef.current) {
-            clearInterval(timerRef.current);
-            timerRef.current = null;
-        }
-
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-            mediaRecorderRef.current.stop();
-        }
-
-        // Stop all tracks
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.stop());
-            streamRef.current = null;
-        }
-
-        setState(prev => ({
-            ...prev,
-            isRecording: false,
-            isPaused: false,
-        }));
-    }, []);
+    }, [config, stopRecording]);
 
     // Pause recording
     const pauseRecording = useCallback(() => {
