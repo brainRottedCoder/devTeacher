@@ -1,0 +1,117 @@
+_format_version: "3.0"
+
+# Services
+services:
+  # Next.js Frontend (main app)
+  - name: nextjs
+    url: http://nextjs:3000
+    routes:
+      - name: nextjs-root
+        paths:
+          - /
+        strip_path: true
+      - name: nextjs-api
+        paths:
+          - /api
+        strip_path: true
+
+  # Auth Service
+  - name: auth-service
+    url: http://auth:3001
+    routes:
+      - name: auth-api
+        paths:
+          - /auth
+        strip_path: true
+
+  # Content Service
+  - name: content-service
+    url: http://content:3002
+    routes:
+      - name: content-api
+        paths:
+          - /content
+        strip_path: true
+
+  # Simulation Service
+  - name: simulation-service
+    url: http://simulation:3003
+    routes:
+      - name: simulation-api
+        paths:
+          - /simulation
+        strip_path: true
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 100
+          policy: local
+
+  # AI Service
+  - name: ai-service
+    url: http://ai:3004
+    routes:
+      - name: ai-api
+        paths:
+          - /ai
+        strip_path: true
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 50
+          policy: local
+
+  # Community Service
+  - name: community-service
+    url: http://community:3005
+    routes:
+      - name: community-api
+        paths:
+          - /community
+        strip_path: true
+
+# Plugins
+plugins:
+  - name: cors
+    config:
+      origins:
+        - "*"
+      methods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+      headers:
+        - Accept
+        - Authorization
+        - Content-Type
+        - X-Request-ID
+      exposed_headers:
+        - X-Total-Count
+      credentials: true
+      max_age: 3600
+
+  - name: jwt
+    config:
+      uri_param_names:
+        - jwt
+      cookie_names: []
+      header_names:
+        - Authorization
+      claims_to_verify:
+        - exp
+      run_on_preflight: false
+
+  - name: request-transformer
+    config:
+      add:
+        headers:
+          - X-Gateway-Service:kong
+
+  - name: response-transformer
+    config:
+      add:
+        headers:
+          - X-Kong-Upstream-Latency:$(latency.request)

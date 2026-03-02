@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sudomakeworld-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - MEGALLM_API_KEY=${MEGALLM_API_KEY}
+      - MEGALLM_BASE_URL=${MEGALLM_BASE_URL}
+    env_file:
+      - .env.local
+    networks:
+      - app-network
+
+  websocket:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: sudomakeworld-websocket
+    restart: unless-stopped
+    ports:
+      - "3006:3006"
+    environment:
+      - NODE_ENV=production
+      - WS_PORT=3006
+      - JWT_SECRET=${JWT_SECRET:-development-secret-change-in-production}
+    env_file:
+      - .env.local
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

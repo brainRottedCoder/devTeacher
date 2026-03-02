@@ -1,0 +1,160 @@
+_format_version: "3.0"
+
+_transform: true
+
+services:
+  - name: auth-service
+    url: http://auth-service:3001
+    routes:
+      - name: auth-routes
+        paths:
+          - /api/auth
+        strip_path: false
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 100
+          policy: local
+      - name: request-termination
+        config:
+          status_code: 503
+          message: "Service temporarily unavailable"
+
+  - name: content-service
+    url: http://content-service:3002
+    routes:
+      - name: content-routes
+        paths:
+          - /api/modules
+          - /api/lessons
+          - /api/quizzes
+          - /api/learning-paths
+        strip_path: false
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 200
+          policy: local
+      - name: caching
+        config:
+          strategy: memory
+          content_type:
+            - application/json
+          cache_ttl: 300
+
+  - name: simulation-service
+    url: http://simulation-service:3003
+    routes:
+      - name: simulation-routes
+        paths:
+          - /api/simulate
+          - /api/design
+        strip_path: false
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 50
+          policy: local
+
+  - name: ai-service
+    url: http://ai-service:3004
+    routes:
+      - name: ai-routes
+        paths:
+          - /api/ai
+          - /api/chat
+        strip_path: false
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 30
+          policy: local
+      - name: request-size-limiting
+        config:
+          allowed_payload_size: 10
+
+  - name: community-service
+    url: http://community-service:3005
+    routes:
+      - name: community-routes
+        paths:
+          - /api/community
+          - /api/collaboration
+        strip_path: false
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 100
+          policy: local
+
+  - name: websocket-service
+    url: http://websocket-server:3006
+    routes:
+      - name: websocket-routes
+        paths:
+          - /ws
+        protocols:
+          - ws
+          - wss
+        strip_path: false
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 1000
+          policy: local
+
+plugins:
+  - name: cors
+    config:
+      origins:
+        - "*"
+      methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - PATCH
+        - OPTIONS
+      headers:
+        - Accept
+        - Accept-Version
+        - Content-Length
+        - Content-MD5
+        - Content-Type
+        - Date
+        - X-Auth-Token
+        - Authorization
+      exposed_headers:
+        - X-Auth-Token
+      credentials: true
+      max_age: 3600
+
+  - name: compression
+    config:
+      enabled: true
+      types:
+        - application/json
+        - text/plain
+        - text/html
+
+  - name: request-id
+    config:
+      header_name: X-Request-ID
+      generator: uuid
+
+  - name: correlation-id
+    config:
+      header_name: X-Correlation-ID
+      generator: uuid
+      echo_downstream: true
+
+  - name: prometheus
+    config:
+      per_consumer: true
+      status_code_metrics: true
+      latency_metrics: true
+      bandwidth_metrics: true
+
+  - name: file-log
+    config:
+      path: /var/log/kong/access.log

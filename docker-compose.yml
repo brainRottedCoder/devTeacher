@@ -1,0 +1,233 @@
+version: '3.8'
+
+services:
+  gateway:
+    image: kong:3.4-alpine
+    container_name: sudomakeworld-gateway
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /etc/kong/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_PROXY_LISTEN: "0.0.0.0:8000"
+      KONG_ADMIN_LISTEN: "0.0.0.0:8001"
+    ports:
+      - "8000:8000"
+      - "8443:8443"
+      - "8001:8001"
+    volumes:
+      - ./services/gateway/kong.yml:/etc/kong/kong.yml:ro
+    networks:
+      - sudomakeworld-network
+    depends_on:
+      - auth-service
+      - content-service
+      - simulation-service
+      - ai-service
+      - community-service
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth/Dockerfile
+    container_name: sudomakeworld-auth
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/sudomakeworld
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "3001:3001"
+    networks:
+      - sudomakeworld-network
+    depends_on:
+      - postgres
+      - redis
+
+  content-service:
+    build:
+      context: .
+      dockerfile: services/content/Dockerfile
+    container_name: sudomakeworld-content
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/sudomakeworld
+      MONGODB_URI: mongodb://mongodb:27017/sudomakeworld
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "3002:3002"
+    networks:
+      - sudomakeworld-network
+    depends_on:
+      - postgres
+      - mongodb
+      - redis
+
+  simulation-service:
+    build:
+      context: .
+      dockerfile: services/simulation/Dockerfile
+    container_name: sudomakeworld-simulation
+    environment:
+      NODE_ENV: production
+      PORT: 3003
+      REDIS_URL: redis://redis:6379
+      SIMULATION_WORKERS: 4
+    ports:
+      - "3003:3003"
+    networks:
+      - sudomakeworld-network
+    depends_on:
+      - redis
+
+  ai-service:
+    build:
+      context: .
+      dockerfile: services/ai/Dockerfile
+    container_name: sudomakeworld-ai
+    environment:
+      NODE_ENV: production
+      PORT: 3004
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      MEGALLM_API_KEY: ${MEGALLM_API_KEY}
+      MEGALLM_BASE_URL: ${MEGALLM_BASE_URL}
+      PINECONE_API_KEY: ${PINECONE_API_KEY}
+      PINECONE_ENVIRONMENT: ${PINECONE_ENVIRONMENT}
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "3004:3004"
+    networks:
+      - sudomakeworld-network
+    depends_on:
+      - redis
+
+  community-service:
+    build:
+      context: .
+      dockerfile: services/community/Dockerfile
+    container_name: sudomakeworld-community
+    environment:
+      NODE_ENV: production
+      PORT: 3005
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/sudomakeworld
+      REDIS_URL: redis://redis:6379
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+    ports:
+      - "3005:3005"
+    networks:
+      - sudomakeworld-network
+    depends_on:
+      - postgres
+      - redis
+
+  websocket-server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: sudomakeworld-websocket
+    environment:
+      NODE_ENV: production
+      WS_PORT: 3006
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "3006:3006"
+    networks:
+      - sudomakeworld-network
+    depends_on:
+      - redis
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: sudomakeworld-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sudomakeworld
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infrastructure/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - sudomakeworld-network
+
+  mongodb:
+    image: mongo:6
+    container_name: sudomakeworld-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - sudomakeworld-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: sudomakeworld-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - sudomakeworld-network
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: sudomakeworld-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - sudomakeworld-network
+
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: sudomakeworld-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    networks:
+      - sudomakeworld-network
+
+  grafana:
+    image: grafana/grafana:10.0.0
+    container_name: sudomakeworld-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./infrastructure/grafana/dashboards:/etc/grafana/provisioning/dashboards
+    networks:
+      - sudomakeworld-network
+    depends_on:
+      - prometheus
+
+networks:
+  sudomakeworld-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  mongo-data:
+  redis-data:
+  rabbitmq-data:
+  prometheus-data:
+  grafana-data:

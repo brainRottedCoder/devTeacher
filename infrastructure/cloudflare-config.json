@@ -1,0 +1,254 @@
+{
+  "version": 1,
+  "config": {
+    "rules": [
+      {
+        "id": "cache-static-assets",
+        "status": "active",
+        "description": "Cache static assets at edge",
+        "action": "cache",
+        "conditions": {
+          "all": [
+            {
+              "field": "uri_path",
+              "operator": "matches",
+              "value": "^/(_next/static|public)/.*$"
+            }
+          ]
+        },
+        "action_parameters": {
+          "edge_ttl": 31536000,
+          "browser_ttl": 31536000,
+          "cache_key": {
+            "custom_key": {
+              "query_string": {
+                "include": "*"
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "cache-api-responses",
+        "status": "active",
+        "description": "Cache API responses",
+        "action": "cache",
+        "conditions": {
+          "all": [
+            {
+              "field": "uri_path",
+              "operator": "matches",
+              "value": "^/api/(modules|lessons|learning-paths)"
+            },
+            {
+              "field": "request_method",
+              "operator": "equals",
+              "value": "GET"
+            }
+          ]
+        },
+        "action_parameters": {
+          "edge_ttl": 300,
+          "browser_ttl": 60
+        }
+      },
+      {
+        "id": "no-cache-ai-endpoints",
+        "status": "active",
+        "description": "Never cache AI endpoints",
+        "action": "bypass_cache",
+        "conditions": {
+          "all": [
+            {
+              "field": "uri_path",
+              "operator": "matches",
+              "value": "^/api/(ai|chat)"
+            }
+          ]
+        }
+      },
+      {
+        "id": "rate-limit-api",
+        "status": "active",
+        "description": "Rate limit API endpoints",
+        "action": "challenge",
+        "conditions": {
+          "all": [
+            {
+              "field": "uri_path",
+              "operator": "matches",
+              "value": "^/api/.*$"
+            }
+          ]
+        },
+        "action_parameters": {
+          "response": {
+            "status_code": 429,
+            "content_type": "application/json",
+            "body": "{\"error\":\"Rate limit exceeded\",\"message\":\"Too many requests\"}"
+          }
+        },
+        "rate_limit": {
+          "threshold": 100,
+          "period": 60
+        }
+      }
+    ],
+    "page_rules": [
+      {
+        "id": "security-headers",
+        "status": "active",
+        "description": "Add security headers",
+        "url": "*.sudomakeworld.com/*",
+        "actions": [
+          {
+            "type": "add_header",
+            "header": {
+              "name": "X-Frame-Options",
+              "value": "SAMEORIGIN"
+            }
+          },
+          {
+            "type": "add_header",
+            "header": {
+              "name": "X-Content-Type-Options",
+              "value": "nosniff"
+            }
+          },
+          {
+            "type": "add_header",
+            "header": {
+              "name": "X-XSS-Protection",
+              "value": "1; mode=block"
+            }
+          },
+          {
+            "type": "add_header",
+            "header": {
+              "name": "Referrer-Policy",
+              "value": "strict-origin-when-cross-origin"
+            }
+          },
+          {
+            "type": "add_header",
+            "header": {
+              "name": "Permissions-Policy",
+              "value": "camera=(), microphone=(self), geolocation=()"
+            }
+          }
+        ]
+      },
+      {
+        "id": "api-compression",
+        "status": "active",
+        "description": "Enable compression for API",
+        "url": "api.sudomakeworld.com/*",
+        "actions": [
+          {
+            "type": "compression",
+            "enabled": true,
+            "algorithms": ["gzip", "brotli"]
+          }
+        ]
+      },
+      {
+        "id": "websocket-routing",
+        "status": "active",
+        "description": "Route WebSocket connections",
+        "url": "ws.sudomakeworld.com/*",
+        "actions": [
+          {
+            "type": "route",
+            "origin": "websocket-server"
+          }
+        ]
+      }
+    ],
+    "load_balancers": [
+      {
+        "name": "api-lb",
+        "enabled": true,
+        "fallback_pool": "secondary-pool",
+        "default_pools": ["primary-pool"],
+        "region_pools": {
+          "NA": ["primary-pool"],
+          "EU": ["eu-pool"],
+          "APAC": ["apac-pool"]
+        },
+        "pop_pools": {},
+        "ttl": 30,
+        "proxied": true,
+        "steering_policy": "dynamic_latency",
+        "health_check": {
+          "interval": 10,
+          "timeout": 5,
+          "unhealthy_threshold": 3,
+          "healthy_threshold": 2,
+          "path": "/health"
+        }
+      }
+    ],
+    "pools": [
+      {
+        "name": "primary-pool",
+        "origins": [
+          {
+            "name": "primary-1",
+            "address": "api-primary.sudomakeworld.com",
+            "enabled": true,
+            "weight": 1
+          },
+          {
+            "name": "primary-2",
+            "address": "api-secondary.sudomakeworld.com",
+            "enabled": true,
+            "weight": 1
+          }
+        ],
+        "check_regions": ["NA"]
+      },
+      {
+        "name": "eu-pool",
+        "origins": [
+          {
+            "name": "eu-1",
+            "address": "api-eu.sudomakeworld.com",
+            "enabled": true,
+            "weight": 1
+          }
+        ],
+        "check_regions": ["EU"]
+      },
+      {
+        "name": "apac-pool",
+        "origins": [
+          {
+            "name": "apac-1",
+            "address": "api-apac.sudomakeworld.com",
+            "enabled": true,
+            "weight": 1
+          }
+        ],
+        "check_regions": ["APAC"]
+      }
+    ],
+    "workers": [
+      {
+        "name": "edge-auth",
+        "script": "edge-auth.js",
+        "routes": [
+          "api.sudomakeworld.com/api/auth/*"
+        ],
+        "enabled": true
+      },
+      {
+        "name": "edge-cache-purge",
+        "script": "cache-purge.js",
+        "routes": [
+          "admin.sudomakeworld.com/cache/*"
+        ],
+        "enabled": true
+      }
+    ]
+  }
+}

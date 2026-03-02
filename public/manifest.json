@@ -1,0 +1,110 @@
+{
+    "name": "Azmuth - Developer Learning Platform",
+    "short_name": "Azmuth",
+    "description": "AI-powered developer learning platform with interactive simulations, system design practice, and mock interviews",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#0a0a0f",
+    "theme_color": "#7c3aed",
+    "orientation": "any",
+    "scope": "/",
+    "icons": [
+        {
+            "src": "/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ],
+    "categories": [
+        "education",
+        "productivity",
+        "developer tools"
+    ],
+    "screenshots": [
+        {
+            "src": "/screenshot-wide.png",
+            "sizes": "1280x720",
+            "type": "image/png",
+            "form_factor": "wide"
+        },
+        {
+            "src": "/screenshot-narrow.png",
+            "sizes": "720x1280",
+            "type": "image/png",
+            "form_factor": "narrow"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "Simulator",
+            "short_name": "Simulate",
+            "description": "Run scalability simulations",
+            "url": "/simulate",
+            "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+        },
+        {
+            "name": "Architecture Studio",
+            "short_name": "Design",
+            "description": "Design system architectures",
+            "url": "/design",
+            "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+        },
+        {
+            "name": "Interview Prep",
+            "short_name": "Interview",
+            "description": "Practice with AI mock interviews",
+            "url": "/interview",
+            "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+        },
+        {
+            "name": "Learning Modules",
+            "short_name": "Modules",
+            "description": "Browse learning modules",
+            "url": "/modules",
+            "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+        }
+    ],
+    "related_applications": [],
+    "prefer_related_applications": false,
+    "lang": "en",
+    "dir": "ltr",
+    "display_override": ["window-controls-overlay", "standalone", "browser"],
+    "edge_side_panel": {
+        "preferred_width": 400
+    },
+    "share_target": {
+        "action": "/share",
+        "method": "POST",
+        "enctype": "multipart/form-data",
+        "params": {
+            "title": "title",
+            "text": "text",
+            "url": "url"
+        }
+    },
+    "handle_links": "preferred",
+    "launch_handler": {
+        "client_mode": "navigate-existing"
+    },
+    "file_handlers": [
+        {
+            "action": "/import",
+            "accept": {
+                "application/json": [".json"]
+            }
+        }
+    ],
+    "protocol_handlers": [
+        {
+            "protocol": "web+sudomake",
+            "url": "/handle?uri=%s"
+        }
+    ]
+}
