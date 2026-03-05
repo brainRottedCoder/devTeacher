@@ -121,6 +121,13 @@ function DesignStudio() {
     const [isGenerating, setIsGenerating] = useState(false);
     const [aiError, setAiError] = useState<string | null>(null);
 
+    const [contextMenu, setContextMenu] = useState<{
+        id: string;
+        top: number;
+        left: number;
+        type: 'node' | 'edge';
+    } | null>(null);
+
     const designId = "design-demo";
     const {
         session,
@@ -203,6 +210,61 @@ function DesignStudio() {
         },
         [screenToFlowPosition, setNodes, isConnected, broadcastEvent]
     );
+
+    const onNodeContextMenu = useCallback(
+        (event: React.MouseEvent, node: Node) => {
+            event.preventDefault();
+            const bounds = reactFlowWrapper.current?.getBoundingClientRect();
+            if (!bounds) return;
+            setContextMenu({
+                id: node.id,
+                top: event.clientY - bounds.top,
+                left: event.clientX - bounds.left,
+                type: 'node',
+            });
+        },
+        [setContextMenu]
+    );
+
+    const onEdgeContextMenu = useCallback(
+        (event: React.MouseEvent, edge: Edge) => {
+            event.preventDefault();
+            const bounds = reactFlowWrapper.current?.getBoundingClientRect();
+            if (!bounds) return;
+            setContextMenu({
+                id: edge.id,
+                top: event.clientY - bounds.top,
+                left: event.clientX - bounds.left,
+                type: 'edge',
+            });
+        },
+        [setContextMenu]
+    );
+
+    const onPaneClick = useCallback(() => setContextMenu(null), [setContextMenu]);
+
+    const handleContextMenuDelete = useCallback(() => {
+        if (contextMenu?.type === 'node') {
+            setNodes((nds) => nds.filter((node) => node.id !== contextMenu.id));
+            setEdges((eds) => eds.filter((edge) => edge.source !== contextMenu.id && edge.target !== contextMenu.id));
+            if (isConnected) {
+                broadcastEvent('node_delete', { id: contextMenu.id });
+            }
+        } else if (contextMenu?.type === 'edge') {
+            setEdges((eds) => eds.filter((edge) => edge.id !== contextMenu.id));
+            if (isConnected) {
+                broadcastEvent('edge_delete', { id: contextMenu.id });
+            }
+        }
+        setContextMenu(null);
+    }, [contextMenu, setNodes, setEdges, isConnected, broadcastEvent]);
+
+    const handleDisconnectNode = useCallback(() => {
+        if (contextMenu?.type === 'node') {
+            setEdges((eds) => eds.filter((edge) => edge.source !== contextMenu.id && edge.target !== contextMenu.id));
+        }
+        setContextMenu(null);
+    }, [contextMenu, setEdges]);
 
     const onMouseMove = useCallback((event: React.MouseEvent) => {
         if (!isConnected || !session) return;
@@ -605,6 +667,9 @@ function DesignStudio() {
                                 onConnect={onConnect}
                                 onDrop={onDrop}
                                 onDragOver={onDragOver}
+                                onNodeContextMenu={onNodeContextMenu}
+                                onEdgeContextMenu={onEdgeContextMenu}
+                                onPaneClick={onPaneClick}
                                 nodeTypes={nodeTypes}
                                 fitView
                                 fitViewOptions={{ padding: 0.3 }}
@@ -624,6 +689,42 @@ function DesignStudio() {
                                     maskColor="rgba(0, 0, 0, 0.8)"
                                 />
                             </ReactFlow>
+
+                            {/* Context Menu */}
+                            {contextMenu && (
+                                <div
+                                    className="absolute z-50 bg-[#1a1a2e] border border-white/10 rounded-lg shadow-xl overflow-hidden py-1 min-w-[160px]"
+                                    style={{ top: contextMenu.top, left: contextMenu.left }}
+                                >
+                                    {contextMenu.type === 'node' && (
+                                        <>
+                                            <button
+                                                onClick={handleDisconnectNode}
+                                                className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-white/[0.06] transition-colors flex items-center gap-2"
+                                            >
+                                                <X className="w-4 h-4" />
+                                                Disconnect
+                                            </button>
+                                            <button
+                                                onClick={handleContextMenuDelete}
+                                                className="w-full text-left px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-2"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                                Delete
+                                            </button>
+                                        </>
+                                    )}
+                                    {contextMenu.type === 'edge' && (
+                                        <button
+                                            onClick={handleContextMenuDelete}
+                                            className="w-full text-left px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-2"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                            Delete Edge
+                                        </button>
+                                    )}
+                                </div>
+                            )}
 
                             {/* Collaborator Cursors */}
                             {isConnected && Array.from(cursors.entries()).map(([id, pos]) => {

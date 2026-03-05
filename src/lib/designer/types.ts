@@ -18,6 +18,8 @@ export type ArchitectureComponentType =
     | 'api-server'
     | 'app-server'
     | 'microservice'
+    | 'graphql-api'
+    | 'websocket-server'
     // Databases
     | 'postgres'
     | 'mysql'
@@ -25,14 +27,20 @@ export type ArchitectureComponentType =
     | 'redis'
     | 'cassandra'
     | 'dynamodb'
+    | 'elasticsearch'
+    | 's3-bucket'
     // Cache
     | 'cache-layer'
     | 'cdn'
+    | 'cloudflare'
     // Infrastructure
     | 'load-balancer'
     | 'api-gateway'
     | 'message-queue'
     | 'reverse-proxy'
+    | 'kafka'
+    | 'firewall'
+    | 'vpc'
     // Services
     | 'lambda'
     | 'container'
@@ -112,19 +120,19 @@ export const COMPONENT_LIBRARY: Record<ArchitectureComponentCategory, {
 }> = {
     server: {
         label: 'Servers',
-        components: ['web-server', 'api-server', 'app-server', 'microservice'],
+        components: ['web-server', 'api-server', 'app-server', 'microservice', 'graphql-api', 'websocket-server'],
     },
     database: {
         label: 'Databases',
-        components: ['postgres', 'mysql', 'mongodb', 'redis', 'cassandra', 'dynamodb'],
+        components: ['postgres', 'mysql', 'mongodb', 'redis', 'cassandra', 'dynamodb', 'elasticsearch', 's3-bucket'],
     },
     cache: {
         label: 'Cache & CDN',
-        components: ['cache-layer', 'cdn'],
+        components: ['cache-layer', 'cdn', 'cloudflare'],
     },
     infrastructure: {
         label: 'Infrastructure',
-        components: ['load-balancer', 'api-gateway', 'message-queue', 'reverse-proxy'],
+        components: ['load-balancer', 'api-gateway', 'message-queue', 'reverse-proxy', 'kafka', 'firewall', 'vpc'],
     },
     service: {
         label: 'Services',
@@ -171,9 +179,27 @@ export const COMPONENT_CONFIGS: Record<ArchitectureComponentType, ArchitectureCo
         icon: '🔷',
         color: '#06b6d4',
         category: 'server',
-        canConnectTo: ['postgres', 'mongodb', 'redis', 'message-queue', 'api-gateway'],
+        canConnectTo: ['postgres', 'mongodb', 'redis', 'message-queue', 'api-gateway', 'kafka', 'elasticsearch', 's3-bucket'],
         maxConnections: 10,
         description: 'Independent service component',
+    },
+    'graphql-api': {
+        label: 'GraphQL API',
+        icon: '🕸️',
+        color: '#e535ab',
+        category: 'server',
+        canConnectTo: ['postgres', 'mongodb', 'redis', 'microservice'],
+        maxConnections: 20,
+        description: 'GraphQL Endpoint',
+    },
+    'websocket-server': {
+        label: 'WebSocket Server',
+        icon: '📡',
+        color: '#8b5cf6',
+        category: 'server',
+        canConnectTo: ['redis', 'kafka', 'message-queue'],
+        maxConnections: 1000,
+        description: 'Real-time WebSocket endpoint',
     },
 
     // Databases
@@ -236,6 +262,24 @@ export const COMPONENT_CONFIGS: Record<ArchitectureComponentType, ArchitectureCo
         maxConnections: 100,
         description: 'AWS managed NoSQL database',
     },
+    'elasticsearch': {
+        label: 'Elasticsearch',
+        icon: '🔍',
+        color: '#005571',
+        category: 'database',
+        canConnectTo: ['api-server', 'microservice', 'app-server'],
+        maxConnections: 100,
+        description: 'Search and analytics engine',
+    },
+    's3-bucket': {
+        label: 'Cloud Storage',
+        icon: '🪣',
+        color: '#e35e26',
+        category: 'database',
+        canConnectTo: ['api-server', 'microservice', 'cdn', 'lambda'],
+        maxConnections: 1000,
+        description: 'Object storage for files and media',
+    },
 
     // Cache
     'cache-layer': {
@@ -252,9 +296,18 @@ export const COMPONENT_CONFIGS: Record<ArchitectureComponentType, ArchitectureCo
         icon: '🌍',
         color: '#f97316',
         category: 'cache',
-        canConnectTo: ['web-server', 'load-balancer', 'web-client'],
+        canConnectTo: ['web-server', 'load-balancer', 'web-client', 's3-bucket'],
         maxConnections: 100,
         description: 'Content delivery network',
+    },
+    'cloudflare': {
+        label: 'Cloudflare',
+        icon: '☁️',
+        color: '#f38020',
+        category: 'cache',
+        canConnectTo: ['web-server', 'load-balancer', 'api-server', 'firewall'],
+        maxConnections: 1000,
+        description: 'Global cloud network and security',
     },
 
     // Infrastructure
@@ -293,6 +346,33 @@ export const COMPONENT_CONFIGS: Record<ArchitectureComponentType, ArchitectureCo
         canConnectTo: ['web-server', 'api-server', 'load-balancer'],
         maxConnections: 30,
         description: 'Request routing and SSL termination',
+    },
+    'kafka': {
+        label: 'Kafka Cluster',
+        icon: '🛤️',
+        color: '#111827',
+        category: 'infrastructure',
+        canConnectTo: ['microservice', 'app-server', 'elasticsearch'],
+        maxConnections: 100,
+        description: 'Distributed event streaming platform',
+    },
+    'firewall': {
+        label: 'WAF / Firewall',
+        icon: '🧱',
+        color: '#ef4444',
+        category: 'infrastructure',
+        canConnectTo: ['load-balancer', 'api-gateway', 'reverse-proxy'],
+        maxConnections: 100,
+        description: 'Web Application Firewall',
+    },
+    'vpc': {
+        label: 'VPC',
+        icon: '🔒',
+        color: '#14b8a6',
+        category: 'infrastructure',
+        canConnectTo: ['load-balancer', 'api-gateway', 'app-server', 'postgres', 'mysql', 'mongodb', 'redis'],
+        maxConnections: 50,
+        description: 'Virtual Private Cloud network',
     },
 
     // Services
