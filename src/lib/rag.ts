@@ -78,30 +78,38 @@ export function chunkText(text: string, moduleId: string, lessonId?: string, les
 }
 
 /**
- * Generate embeddings — tries MegaLLM/OpenAI first, falls back to Gemini
+ * Generate embeddings — tries Gemini first (primary), falls back to OpenAI
  */
 export async function generateEmbedding(text: string): Promise<number[] | null> {
-    // Try MegaLLM / OpenAI first
-    const megallmResult = await generateEmbeddingViaOpenAI(text);
-    if (megallmResult) return megallmResult;
-
-    // Fallback to Gemini
+    // Try Gemini first (most reliable for this project)
     const geminiResult = await generateEmbeddingViaGemini(text);
     if (geminiResult) return geminiResult;
 
-    console.warn("[RAG] No embedding provider succeeded");
+    // Fallback to OpenAI (skip MegaLLM as it doesn't support embeddings)
+    const openaiResult = await generateEmbeddingViaOpenAI(text);
+    if (openaiResult) return openaiResult;
+
+    console.warn("[RAG] No embedding provider succeeded — falling back to keyword search only");
     return null;
 }
 
 /**
- * Generate embedding using MegaLLM / OpenAI compatible API
+ * Generate embedding using OpenAI compatible API
+ * Note: MegaLLM does not support the /embeddings endpoint, so we only use
+ * a real OpenAI key here if OPENAI_API_KEY is set separately.
  */
 async function generateEmbeddingViaOpenAI(text: string): Promise<number[] | null> {
-    const apiKey = process.env.MEGALLM_API_KEY || process.env.OPENAI_API_KEY;
+    const baseUrl = process.env.MEGALLM_BASE_URL || "https://api.openai.com/v1";
+    
+    // Skip if using MegaLLM — it doesn't support the embeddings endpoint
+    if (baseUrl.includes("megallm")) {
+        return null;
+    }
+
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return null;
 
     try {
-        const baseUrl = process.env.MEGALLM_BASE_URL || "https://api.openai.com/v1";
         const response = await fetch(`${baseUrl}/embeddings`, {
             method: "POST",
             headers: {
@@ -115,59 +123,68 @@ async function generateEmbeddingViaOpenAI(text: string): Promise<number[] | null
         });
 
         if (!response.ok) {
-            console.warn("[RAG] MegaLLM/OpenAI embedding failed:", response.status, response.statusText);
+            console.warn("[RAG] OpenAI embedding failed:", response.status, response.statusText);
             return null;
         }
 
         const data = await response.json();
         return data.data?.[0]?.embedding || null;
     } catch (error) {
-        console.warn("[RAG] MegaLLM/OpenAI embedding error:", error);
+        console.warn("[RAG] OpenAI embedding error:", error);
         return null;
     }
 }
 
 /**
- * Generate embedding using Gemini API (fallback)
- * Uses text-embedding-004 model which produces 768-dimensional vectors.
- * We pad/truncate to 1536 dimensions to match our pgvector column.
+ * Generate embedding using Gemini API
+ * Tries text-embedding-004 first, falls back to embedding-001.
+ * We pad to 1536 dimensions to match our pgvector column.
  */
 async function generateEmbeddingViaGemini(text: string): Promise<number[] | null> {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) return null;
 
-    try {
-        const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`,
-            {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    model: "models/text-embedding-004",
-                    content: { parts: [{ text: text.slice(0, 8000) }] },
-                    outputDimensionality: 1536, // Match pgvector column size
-                }),
+    // Models to try — gemini-embedding-001 is the currently available model
+    const models = [
+        { name: "gemini-embedding-001", version: "v1beta" },
+    ];
+
+    for (const model of models) {
+        try {
+            const response = await fetch(
+                `https://generativelanguage.googleapis.com/${model.version}/models/${model.name}:embedContent?key=${apiKey}`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        model: `models/${model.name}`,
+                        content: { parts: [{ text: text.slice(0, 8000) }] },
+                    }),
+                }
+            );
+
+            if (!response.ok) {
+                const errorBody = await response.text().catch(() => "");
+                console.warn(`[RAG] Gemini ${model.name} failed:`, response.status, errorBody.slice(0, 200));
+                continue; // Try next model
             }
-        );
 
-        if (!response.ok) {
-            console.warn("[RAG] Gemini embedding failed:", response.status, response.statusText);
-            return null;
+            const data = await response.json();
+            const embedding = data.embedding?.values;
+            if (!embedding || !Array.isArray(embedding)) continue;
+
+            // Ensure exactly 1536 dimensions (pad with 0 if needed)
+            if (embedding.length < 1536) {
+                return [...embedding, ...new Array(1536 - embedding.length).fill(0)];
+            }
+            return embedding.slice(0, 1536);
+        } catch (error) {
+            console.warn(`[RAG] Gemini ${model.name} error:`, error);
+            continue;
         }
-
-        const data = await response.json();
-        const embedding = data.embedding?.values;
-        if (!embedding || !Array.isArray(embedding)) return null;
-
-        // Ensure exactly 1536 dimensions (pad with 0 if needed)
-        if (embedding.length < 1536) {
-            return [...embedding, ...new Array(1536 - embedding.length).fill(0)];
-        }
-        return embedding.slice(0, 1536);
-    } catch (error) {
-        console.warn("[RAG] Gemini embedding error:", error);
-        return null;
     }
+
+    return null;
 }
 
 /**

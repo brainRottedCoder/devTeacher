@@ -9,6 +9,11 @@ export function Header() {
   const { user, signOut } = useAuth();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
@@ -59,7 +64,7 @@ export function Header() {
             <NavLink href="/community" icon={<Users className="w-3.5 h-3.5" />}>
               Community
             </NavLink>
-            {user && (
+            {mounted && user && (
               <NavLink href="/dashboard" icon={<LayoutDashboard className="w-3.5 h-3.5" />}>
                 Dashboard
               </NavLink>
@@ -71,7 +76,7 @@ export function Header() {
 
           {/* Auth */}
           <div className="hidden md:flex items-center gap-3">
-            {user ? (
+            {mounted && user ? (
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.06]">
                   <div className="w-6 h-6 rounded-full bg-gradient-to-br from-accent-violet to-accent-indigo flex items-center justify-center">
@@ -150,7 +155,7 @@ export function Header() {
           <MobileNavLink href="/pricing" onClick={() => setIsMobileMenuOpen(false)}>
             Pricing
           </MobileNavLink>
-          {user && (
+          {mounted && user && (
             <MobileNavLink href="/dashboard" onClick={() => setIsMobileMenuOpen(false)}>
               Dashboard
             </MobileNavLink>
@@ -160,7 +165,7 @@ export function Header() {
           </MobileNavLink>
 
           <div className="pt-3 mt-3 border-t border-white/[0.06] space-y-2">
-            {user ? (
+            {mounted && user ? (
               <>
                 <div className="flex items-center gap-2 px-3 py-2 text-slate-500">
                   <div className="w-7 h-7 rounded-full bg-gradient-to-br from-accent-violet to-accent-indigo flex items-center justify-center">

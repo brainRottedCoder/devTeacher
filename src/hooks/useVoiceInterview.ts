@@ -78,6 +78,7 @@ export function useVoiceInterview(options: UseVoiceInterviewOptions = {}) {
                     onFinalResult: (transcript: string) => {
                         setFinalTranscript(prev => prev + ' ' + transcript);
                         setInterimTranscript('');
+                        onTranscript?.(transcript, true);
                     },
                     onError: (errorMsg: string) => {
                         setError(errorMsg);

@@ -25,6 +25,7 @@ export interface InterviewTranscript {
     follow_up_questions?: string[];
     feedback?: string;
     score?: number;
+    suggested_answer?: string;
     timestamp: string;
 }
 
@@ -33,6 +34,7 @@ export interface TranscriptEntry {
     response: string;
     feedback?: string;
     score?: number;
+    suggested_answer?: string;
     followUpQuestions?: string[];
 }
 

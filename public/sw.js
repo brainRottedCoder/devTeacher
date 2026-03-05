@@ -133,12 +133,17 @@ self.addEventListener('fetch', (event) => {
 
     // Skip non-GET requests for standard caching
     if (request.method !== 'GET') {
-        // Queue offline requests for API calls, but NOT AI or execute endpoints
-        // AI endpoints (chat, design generate) and code execution must hit the real server
+        // For API calls (except AI/execute which we skip entirely),
+        // try the network FIRST. Only queue for offline if network fails.
         if (url.pathname.startsWith('/api/') && 
             !url.pathname.startsWith('/api/ai/') && 
             !url.pathname.startsWith('/api/execute')) {
-            event.respondWith(queueOfflineRequest(request));
+            event.respondWith(
+                fetch(request.clone()).catch(() => {
+                    // Network failed — queue for offline sync
+                    return queueOfflineRequest(request);
+                })
+            );
             return;
         }
         return;
@@ -332,8 +337,9 @@ async function staleWhileRevalidate(request) {
 
     const fetchPromise = fetch(request).then((response) => {
         if (response.ok) {
+            const responseClone = response.clone();
             caches.open(DYNAMIC_CACHE).then((cache) => {
-                cache.put(request, response.clone());
+                cache.put(request, responseClone);
             });
         }
         return response;

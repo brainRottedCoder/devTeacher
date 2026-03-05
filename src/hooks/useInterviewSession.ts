@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { InterviewSession, AnswerRequest, TranscriptEntry } from "@/types/interview-session.types";
 
 export function useInterviewSession() {
@@ -8,6 +8,13 @@ export function useInterviewSession() {
     const [error, setError] = useState<string | null>(null);
     const [currentQuestion, setCurrentQuestion] = useState<string | null>(null);
     const [isSessionActive, setIsSessionActive] = useState(false);
+
+    // Refs to always have the latest values (avoids stale closures)
+    const sessionRef = useRef<InterviewSession | null>(null);
+    const currentQuestionRef = useRef<string | null>(null);
+
+    useEffect(() => { sessionRef.current = session; }, [session]);
+    useEffect(() => { currentQuestionRef.current = currentQuestion; }, [currentQuestion]);
 
     // Start a new interview session
     const startSession = async (
@@ -37,7 +44,21 @@ export function useInterviewSession() {
                 throw new Error(data.error || "Failed to start interview session");
             }
 
-            setSession(data.session);
+            console.log("[Interview] Raw API response:", JSON.stringify(data));
+            console.log("[Interview] data.session:", data.session);
+            console.log("[Interview] data.session?.id:", data.session?.id);
+
+            // The API might return the session directly or nested
+            const sessionData = data.session || data;
+            
+            if (!sessionData?.id) {
+                console.error("[Interview] Session data missing 'id' field:", sessionData);
+                throw new Error("Session created but missing ID. Cannot proceed.");
+            }
+
+            console.log("[Interview] Setting session with id:", sessionData.id);
+            setSession(sessionData);
+            sessionRef.current = sessionData; // Sync ref immediately
             setIsSessionActive(true);
             setTranscripts([]);
 
@@ -45,6 +66,12 @@ export function useInterviewSession() {
             const questions = await generateFirstQuestion(companyId, interviewType, difficulty);
             if (questions.length > 0) {
                 setCurrentQuestion(questions[0]);
+                currentQuestionRef.current = questions[0]; // Sync ref immediately
+            } else {
+                // Fallback question if parsing fails
+                const fallback = "Tell me about a challenging technical problem you've solved recently and how you approached it.";
+                setCurrentQuestion(fallback);
+                currentQuestionRef.current = fallback;
             }
 
             return data.session;
@@ -57,9 +84,34 @@ export function useInterviewSession() {
         }
     };
 
-    // Answer a question
-    const answerQuestion = async (answer: string) => {
-        if (!session || !currentQuestion) {
+    // Answer a question — accepts session ID and question text explicitly from caller
+    // to avoid all stale closure / ref issues
+    const answerQuestion = async (answer: string, explicitSessionId?: string, explicitQuestion?: string) => {
+        // Use explicit params if provided, fall back to refs, then state
+        const sessionId = explicitSessionId || sessionRef.current?.id || session?.id;
+        const questionText = explicitQuestion || currentQuestionRef.current || currentQuestion;
+        
+        console.log("Submitting answer:", { sessionId, questionText: questionText?.substring(0, 30), answerLength: answer.length });
+
+        // Validate session and question exist
+        if (!sessionId) {
+            setError("No active session. Please start a new interview.");
+            return null;
+        }
+
+        if (!questionText) {
+            setError("No current question. Please wait for the question to load.");
+            return null;
+        }
+
+        // Basic client-side validation for better UX
+        if (!answer.trim()) {
+            setError("Please enter an answer");
+            return null;
+        }
+
+        if (answer.trim().length < 10) {
+            setError("Please provide a more detailed answer (at least 10 characters)");
             return null;
         }
 
@@ -68,9 +120,9 @@ export function useInterviewSession() {
 
         try {
             const request: AnswerRequest = {
-                session_id: session.id,
-                question: currentQuestion,
-                response: answer,
+                session_id: sessionId,
+                question: questionText,
+                response: answer.trim(),
             };
 
             const response = await fetch("/api/interview/transcript", {
@@ -89,21 +141,42 @@ export function useInterviewSession() {
 
             // Update transcripts with proper typing
             const transcriptEntry: TranscriptEntry = {
-                question: currentQuestion,
+                question: questionText || "",
                 response: answer,
-                feedback: data.transcript?.feedback,
-                score: data.transcript?.score,
+                feedback: data.feedback,
+                score: data.score,
+                suggested_answer: data.suggested_answer,
                 followUpQuestions: data.transcript?.follow_up_questions,
             };
             setTranscripts((prev) => [...prev, transcriptEntry]);
 
-            // Set next question
+            // Check if session is completed
+            if (data.session_completed) {
+                setIsSessionActive(false);
+                setCurrentQuestion(null);
+                currentQuestionRef.current = null;
+                const completedSession = session ? { ...session, status: "completed" } : null;
+                setSession(completedSession as InterviewSession | null);
+                sessionRef.current = completedSession as InterviewSession | null;
+                
+                // Complete session on backend
+                await completeSession();
+                
+                return {
+                    ...data,
+                    sessionCompleted: true
+                };
+            }
+
+            // Set next question if available
             if (data.follow_up_question) {
                 setCurrentQuestion(data.follow_up_question);
+                currentQuestionRef.current = data.follow_up_question;
             } else {
                 // No more questions, end session
                 setIsSessionActive(false);
                 setCurrentQuestion(null);
+                currentQuestionRef.current = null;
                 await completeSession();
             }
 
@@ -111,6 +184,7 @@ export function useInterviewSession() {
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : "Failed to process answer";
             setError(errorMessage);
+            console.error("Error in answerQuestion:", err);
             return null;
         } finally {
             setIsLoading(false);
@@ -263,6 +337,8 @@ export function useInterviewSession() {
             const { createClient } = await import("@/lib/supabase/client");
             const supabase = createClient();
             const { data: { session: authSession } } = await supabase.auth.getSession();
+            // Note: getSession() on the client is fine for getting the token.
+            // The Supabase warning is about server-side usage.
             const token = authSession?.access_token;
 
             if (!token) {
@@ -313,12 +389,24 @@ export function useInterviewSession() {
     };
 
     // Helper function to parse questions from AI response
-    const parseQuestions = (text: string) => {
+    const parseQuestions = (text: string): string[] => {
         const lines = text.split('\n');
         const questions = lines
             .map(line => line.trim())
             .filter(line => line && !line.startsWith('```'))
-            .filter(line => line.match(/^\d+\.|\?\s*$|Question:/));
+            // Match numbered lines like "1." or "1)" or lines ending with "?"
+            .filter(line => line.match(/^\d+[.)\s]/) || line.includes('?'))
+            // Clean up the numbering prefix
+            .map(line => line.replace(/^\d+[.)\s]+/, '').trim())
+            .filter(line => line.length > 10); // Filter out too-short lines
+
+        if (questions.length === 0) {
+            // Fallback: if regex didn't match, just take non-empty lines that look like questions
+            return lines
+                .map(line => line.trim())
+                .filter(line => line.length > 20 && !line.startsWith('```') && !line.startsWith('#'))
+                .slice(0, 5);
+        }
 
         return questions;
     };

@@ -5,8 +5,9 @@ export const dynamic = "force-dynamic";
 import { InterviewSession, InterviewRequest } from "@/types/interview-session.types";
 
 async function getAuthUser(supabase: any) {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.user ?? null;
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return null;
+    return user;
 }
 
 export async function GET(request: NextRequest) {

@@ -98,8 +98,14 @@ Please provide:
 1. A score from 1-10 (1 = poor, 10 = excellent)
 2. Detailed feedback on strengths and weaknesses
 3. Specific improvements needed
+4. A suggested correct or ideal answer to the question
 
-Format your response in JSON with "score" and "feedback" fields.
+You MUST FORMAT your entire response as a single, valid JSON object containing exactly the following keys:
+- "score": A number between 1 and 10.
+- "feedback": A detailed string combining strengths, weaknesses, and improvements.
+- "suggested_answer": A comprehensive string explaining the ideal way to answer the question.
+
+Do not wrap the JSON in markdown code blocks. Just return the raw JSON braces.
 `;
 
 export const INTERVIEWER_FOLLOW_UP_PROMPT = (question: string, answer: string) => `

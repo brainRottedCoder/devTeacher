@@ -63,15 +63,37 @@ function InterviewContent() {
 
     const handleSubmitAnswer = async () => {
         const currentAnswer = answerRef.current;
-        if (!currentAnswer.trim() || !isSessionActive) return;
+        
+        // Debug logging
+        console.log("handleSubmitAnswer called", {
+            answerLength: currentAnswer.length,
+            isSessionActive,
+            hasCurrentQuestion: !!currentQuestion,
+            sessionId: session?.id,
+            sessionObj: session ? JSON.stringify(session).substring(0, 100) : 'null'
+        });
+        
+        if (!currentAnswer.trim()) {
+            return;
+        }
+        
+        if (!isSessionActive) {
+            return;
+        }
 
         setIsAnswering(true);
-        const result = await answerQuestion(currentAnswer);
+        // Pass session ID and question explicitly to avoid stale closures
+        const result = await answerQuestion(currentAnswer, session?.id, currentQuestion || undefined);
 
         if (result) {
             setAnswer('');
             if (voiceMode && result.feedback) {
                 await speak(result.feedback);
+            }
+            
+            // Session completed - UI will show the completed banner
+            if (result.session_completed) {
+                console.log('Interview session completed successfully');
             }
         }
 
@@ -103,7 +125,7 @@ function InterviewContent() {
         }
     };
 
-    if (isSessionActive && currentQuestion) {
+    if ((isSessionActive && currentQuestion) || (session?.status === 'completed')) {
         return (
             <MainLayout>
                 <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950">
@@ -142,7 +164,7 @@ function InterviewContent() {
                             {/* Progress */}
                             <div className="mb-6">
                                 <div className="flex items-center justify-between mb-2">
-                                    <span className="text-sm text-gray-400">Question {transcripts.length + 1}</span>
+                                    <span className="text-sm text-gray-400">Question {transcripts.length + 1} of 5</span>
                                     <span className={`text-sm font-medium ${
                                         isSessionActive ? 'text-emerald-400' : 'text-gray-400'
                                     }`}>
@@ -158,26 +180,28 @@ function InterviewContent() {
                             </div>
 
                             {/* Current Question */}
-                            <div className="mb-8">
-                                <div className="rounded-xl bg-violet-500/10 border border-violet-500/20 p-6">
-                                    <div className="flex items-start gap-3">
-                                        <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center flex-shrink-0">
-                                            <span className="text-violet-400 text-sm font-bold">Q</span>
-                                        </div>
-                                        <div>
-                                            <h2 className="text-lg font-semibold text-white mb-2">
-                                                {currentQuestion}
-                                            </h2>
-                                            <p className="text-gray-400 text-sm">
-                                                Take your time to think through your answer. Be clear and structured.
-                                            </p>
+                            {isSessionActive && currentQuestion && (
+                                <div className="mb-8">
+                                    <div className="rounded-xl bg-violet-500/10 border border-violet-500/20 p-6">
+                                        <div className="flex items-start gap-3">
+                                            <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center flex-shrink-0">
+                                                <span className="text-violet-400 text-sm font-bold">Q</span>
+                                            </div>
+                                            <div>
+                                                <h2 className="text-lg font-semibold text-white mb-2">
+                                                    {currentQuestion}
+                                                </h2>
+                                                <p className="text-gray-400 text-sm">
+                                                    Take your time to think through your answer. Be clear and structured.
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
+                            )}
 
                             {/* Voice Controls */}
-                            {voiceMode && isSupported.recognition && (
+                            {voiceMode && isSupported.recognition && isSessionActive && (
                                 <div className="mb-6">
                                     <div className="flex items-center gap-3">
                                         <button
@@ -227,45 +251,65 @@ function InterviewContent() {
                                 </div>
                             )}
 
-                            {/* Answer Input */}
-                            <div className="mb-6">
-                                <textarea
-                                    value={answer}
-                                    onChange={(e) => setAnswer(e.target.value)}
-                                    placeholder={voiceMode ? "Your voice input will appear here, or type manually..." : "Type your answer here..."}
-                                    rows={6}
-                                    className="w-full px-4 py-3 bg-surface-deep border border-white/[0.06] rounded-xl text-white placeholder-gray-500 focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 resize-none"
-                                    disabled={!isSessionActive || isAnswering}
-                                />
-                            </div>
+                            {/* Answer Input & Actions - only when session is active */}
+                            {isSessionActive && (
+                                <>
+                                    <div className="mb-6">
+                                        <textarea
+                                            value={answer}
+                                            onChange={(e) => setAnswer(e.target.value)}
+                                            placeholder={voiceMode ? "Your voice input will appear here, or type manually..." : "Type your answer here..."}
+                                            rows={6}
+                                            className="w-full px-4 py-3 bg-surface-deep border border-white/[0.06] rounded-xl text-white placeholder-gray-500 focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 resize-none"
+                                            disabled={!isSessionActive || isAnswering}
+                                        />
+                                    </div>
 
-                            {/* Action Buttons */}
-                            <div className="flex gap-4">
-                                <button
-                                    onClick={handleSubmitAnswer}
-                                    disabled={!isSessionActive || !answer.trim() || isAnswering}
-                                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl font-medium hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 transition-all"
-                                >
-                                    {isAnswering ? (
-                                        <>
-                                            <Loader2 className="w-5 h-5 animate-spin" />
-                                            Processing...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Send className="w-5 h-5" />
-                                            Submit Answer
-                                        </>
-                                    )}
-                                </button>
-                                <button
-                                    onClick={handleEndSession}
-                                    disabled={!isSessionActive || isAnswering}
-                                    className="px-6 py-3 text-red-400 border border-red-500/30 rounded-xl hover:bg-red-500/10 disabled:opacity-50 transition-colors"
-                                >
-                                    End Interview
-                                </button>
-                            </div>
+                                    {/* Action Buttons */}
+                                    <div className="flex gap-4">
+                                        <button
+                                            onClick={handleSubmitAnswer}
+                                            disabled={!isSessionActive || !answer.trim() || isAnswering}
+                                            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl font-medium hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 transition-all"
+                                        >
+                                            {isAnswering ? (
+                                                <>
+                                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                                    Processing...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Send className="w-5 h-5" />
+                                                    Submit Answer ({5 - transcripts.length} remaining)
+                                                </>
+                                            )}
+                                        </button>
+                                        <button
+                                            onClick={handleEndSession}
+                                            disabled={!isSessionActive || isAnswering}
+                                            className="px-6 py-3 text-red-400 border border-red-500/30 rounded-xl hover:bg-red-500/10 disabled:opacity-50 transition-colors"
+                                        >
+                                            End Interview
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+
+                            {/* Completed Banner */}
+                            {session?.status === 'completed' && (
+                                <div className="mb-6 p-6 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                                    <h2 className="text-xl font-bold text-emerald-400 mb-2">Interview Completed!</h2>
+                                    <p className="text-emerald-300 mb-4">
+                                        Great job! Review your detailed feedback and suggested answers in the transcript below.
+                                    </p>
+                                    <button
+                                        onClick={() => router.push('/interview')}
+                                        className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-500 transition-all"
+                                    >
+                                        Return to Interview Prep
+                                    </button>
+                                </div>
+                            )}
 
                             {/* Error Message */}
                             {error && (
@@ -282,7 +326,7 @@ function InterviewContent() {
                         {transcripts.length > 0 && (
                             <div className="mt-8 rounded-2xl border border-white/[0.06] bg-surface-card p-6">
                                 <h3 className="text-lg font-semibold text-white mb-4">Interview Transcript</h3>
-                                <div className="space-y-4 max-h-60 overflow-y-auto">
+                                <div className="space-y-4 max-h-[600px] overflow-y-auto">
                                     {transcripts.map((transcript, index) => (
                                         <div key={index} className="p-4 rounded-xl bg-surface-deep border border-white/[0.04]">
                                             <div className="text-sm font-medium text-violet-400 mb-2">
@@ -298,6 +342,12 @@ function InterviewContent() {
                                                     {transcript.score && (
                                                         <div className="mt-2 text-sm text-emerald-400">
                                                             Score: {transcript.score}/10
+                                                        </div>
+                                                    )}
+                                                    {transcript.suggested_answer && (
+                                                        <div className="mt-4 pt-3 border-t border-emerald-500/20">
+                                                            <div className="text-sm font-medium text-emerald-400 mb-2">Suggested Answer</div>
+                                                            <p className="text-emerald-300 text-sm">{transcript.suggested_answer}</p>
                                                         </div>
                                                     )}
                                                 </div>

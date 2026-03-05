@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 
 async function getUserId(supabase: any): Promise<string | null> {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.user?.id || null;
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return null;
+    return user.id;
 }
 
 export async function GET(request: NextRequest) {

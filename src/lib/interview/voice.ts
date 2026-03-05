@@ -105,7 +105,7 @@ export function startContinuousRecognition(
             'no-speech': 'No speech detected. Please try again.',
             'audio-capture': 'No microphone found. Please check your audio settings.',
             'not-allowed': 'Microphone permission denied. Please allow microphone access.',
-            'network': 'Network error occurred.',
+            'network': 'Browser speech services blocked (common in Brave/strict privacy settings). Please use text input or standard Chrome.',
         };
         const errorMessage = errorMessages[event.error] || `Speech recognition error: ${event.error}`;
         handler.onError?.(errorMessage);
@@ -176,7 +176,14 @@ export function startSpeechRecognition(
         };
 
         recognition.onerror = (event: any) => {
-            reject(new Error(`Speech recognition error: ${event.error}`));
+            const errorMessages: Record<string, string> = {
+                'no-speech': 'No speech detected. Please try again.',
+                'audio-capture': 'No microphone found. Please check your audio settings.',
+                'not-allowed': 'Microphone permission denied. Please allow microphone access.',
+                'network': 'Browser speech services blocked (common in Brave/strict privacy settings). Please use text input or standard Chrome.',
+            };
+            const errorMessage = errorMessages[event.error] || `Speech recognition error: ${event.error}`;
+            reject(new Error(errorMessage));
         };
 
         recognition.onend = () => {

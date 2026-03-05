@@ -8,8 +8,9 @@ import {
 export const dynamic = "force-dynamic";
 
 async function getAuthUser(supabase: any) {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.user ?? null;
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return null;
+    return user;
 }
 
 // GET: Get detailed feedback report for a completed interview session

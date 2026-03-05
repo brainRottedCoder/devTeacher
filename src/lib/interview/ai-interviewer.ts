@@ -10,6 +10,7 @@ import {
 export async function analyzeAnswer(question: string, answer: string): Promise<{
     score: number;
     feedback: string;
+    suggested_answer?: string;
 }> {
     const prompt = INTERVIEWER_ANALYZE_ANSWER_PROMPT(question, answer);
 
@@ -21,7 +22,8 @@ export async function analyzeAnswer(question: string, answer: string): Promise<{
         console.error("Error analyzing answer:", error);
         return {
             score: 5,
-            feedback: "Unable to analyze answer due to technical issues. Your answer shows basic understanding but could benefit from more details and examples."
+            feedback: "Unable to analyze answer due to technical issues. Your answer shows basic understanding but could benefit from more details and examples.",
+            suggested_answer: "The ideal answer would cover the core concepts, discuss trade-offs, and provide real-world examples."
         };
     }
 }
@@ -141,13 +143,22 @@ export async function generateTargetedQuestionsFeedback(
     }
 }
 
-function parseAnalysis(response: string): { score: number; feedback: string } {
+function parseAnalysis(response: string): { score: number; feedback: string; suggested_answer?: string } {
     try {
+        let jsonStr = response.trim();
+        if (jsonStr.startsWith('```json')) {
+            jsonStr = jsonStr.substring(7);
+            if (jsonStr.endsWith('```')) {
+                jsonStr = jsonStr.substring(0, jsonStr.length - 3);
+            }
+        }
+        
         // Try to parse JSON first
-        const parsed = JSON.parse(response);
+        const parsed = JSON.parse(jsonStr);
         return {
             score: Math.max(1, Math.min(10, parsed.score || 5)),
-            feedback: parsed.feedback || "Answer shows basic understanding but could be more detailed."
+            feedback: parsed.feedback || "Answer shows basic understanding but could be more detailed.",
+            suggested_answer: parsed.suggested_answer
         };
     } catch {
         // If not JSON, extract score from text
@@ -156,7 +167,8 @@ function parseAnalysis(response: string): { score: number; feedback: string } {
 
         return {
             score,
-            feedback: response.trim()
+            feedback: response.trim(),
+            suggested_answer: "Could not retrieve a suggested answer. Please follow structured formats like the STAR method (Situation, Task, Action, Result)."
         };
     }
 }
