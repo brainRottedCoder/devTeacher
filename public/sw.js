@@ -11,10 +11,10 @@
  * - Learning content caching
  */
 
-const CACHE_NAME = 'sudomakeworld-v5';
-const STATIC_CACHE = 'sudomakeworld-static-v5';
-const DYNAMIC_CACHE = 'sudomakeworld-dynamic-v5';
-const OFFLINE_QUEUE = 'sudomakeworld-offline-queue';
+const CACHE_NAME = 'sudomakeworld-v6';
+const STATIC_CACHE = 'sudomakeworld-static-v6';
+const DYNAMIC_CACHE = 'sudomakeworld-dynamic-v6';
+const OFFLINE_QUEUE = 'sudomakeworld-offline-queue-v6';
 
 // IndexedDB configuration for service worker
 const DB_NAME = 'sudomakeworld';
@@ -81,7 +81,7 @@ self.addEventListener('activate', (event) => {
         caches.keys().then((keys) => {
             return Promise.all(
                 keys
-                    .filter((key) => !key.includes('v5'))
+                    .filter((key) => !key.includes('v6'))
                     .map((key) => {
                         console.log('[SW] Deleting old cache:', key);
                         return caches.delete(key);
@@ -172,7 +172,8 @@ self.addEventListener('fetch', (event) => {
         url.pathname.startsWith('/static/') ||
         url.pathname.startsWith('/fonts/') ||
         url.pathname.startsWith('/icons/')) {
-        event.respondWith(cacheFirst(request));
+        // Use networkFirst for Next.js chunks to avoid stale cache after recompilation
+        event.respondWith(networkFirst(request));
         return;
     }
 
