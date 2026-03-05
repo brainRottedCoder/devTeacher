@@ -13,12 +13,15 @@ export interface ExecutionResult {
 
 interface UseCodeExecutionOptions {
     onError?: (error: Error) => void;
+    /** If true, requires authentication to execute code. Default: true */
+    requireAuth?: boolean;
 }
 
 export function useCodeExecution(options: UseCodeExecutionOptions = {}) {
     const [isExecuting, setIsExecuting] = useState(false);
     const [result, setResult] = useState<ExecutionResult | null>(null);
     const [error, setError] = useState<Error | null>(null);
+    const requireAuth = options.requireAuth !== false; // Default to true
 
     const executeCode = useCallback(
         async (code: string, language: string, input?: string) => {
@@ -28,20 +31,24 @@ export function useCodeExecution(options: UseCodeExecutionOptions = {}) {
 
             try {
                 const supabase = createClient();
+                let accessToken: string | null = null;
 
-                const {
-                    data: { session },
-                } = await supabase.auth.getSession();
+                if (requireAuth) {
+                    const {
+                        data: { session },
+                    } = await supabase.auth.getSession();
 
-                if (!session?.access_token) {
-                    throw new Error("Not authenticated. Please log in to run code.");
+                    if (!session?.access_token) {
+                        throw new Error("Please log in to run code.");
+                    }
+                    accessToken = session.access_token;
                 }
 
                 const response = await fetch("/api/execute", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
-                        Authorization: `Bearer ${session.access_token}`,
+                        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
                     },
                     body: JSON.stringify({
                         code,
@@ -73,7 +80,7 @@ export function useCodeExecution(options: UseCodeExecutionOptions = {}) {
                 setIsExecuting(false);
             }
         },
-        [options]
+        [options, requireAuth]
     );
 
     const clearResult = useCallback(() => {

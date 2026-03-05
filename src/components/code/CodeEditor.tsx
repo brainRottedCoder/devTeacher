@@ -42,7 +42,7 @@ export function CodeEditor({
     const [input, setInput] = useState("");
     const [showInput, setShowInput] = useState(false);
 
-    const { executeCode, isExecuting, result, error, clearResult } = useCodeExecution();
+    const { executeCode, isExecuting, result, error, clearResult } = useCodeExecution({ requireAuth: false });
 
     const handleLanguageChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
         const newLang = e.target.value;
@@ -204,8 +204,8 @@ export function CodeEditor({
                         </span>
                         {result && (
                             <span className="text-xs text-gray-500 dark:text-gray-400">
-                                {result.executionTime.toFixed(2)}ms
-                                {result.memory && ` • ${(result.memory / 1024).toFixed(0)}KB`}
+                                {(result.executionTime ?? 0).toFixed(2)}ms
+                                {result.memory ? ` • ${(result.memory / 1024).toFixed(0)}KB` : ''}
                             </span>
                         )}
                     </div>

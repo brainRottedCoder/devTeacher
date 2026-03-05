@@ -133,9 +133,11 @@ self.addEventListener('fetch', (event) => {
 
     // Skip non-GET requests for standard caching
     if (request.method !== 'GET') {
-        // Queue offline requests for API calls, but NOT AI endpoints
-        // AI endpoints (chat, design generate) must hit the real server
-        if (url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/ai/')) {
+        // Queue offline requests for API calls, but NOT AI or execute endpoints
+        // AI endpoints (chat, design generate) and code execution must hit the real server
+        if (url.pathname.startsWith('/api/') && 
+            !url.pathname.startsWith('/api/ai/') && 
+            !url.pathname.startsWith('/api/execute')) {
             event.respondWith(queueOfflineRequest(request));
             return;
         }

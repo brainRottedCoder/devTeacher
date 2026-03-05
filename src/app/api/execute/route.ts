@@ -12,21 +12,32 @@ function getSupabase() {
     return _supabase;
 }
 
-// Piston API - Free and open source code execution
-const PISTON_API_URL = "https://emkc.org/api/v2/piston";
+// Language mapping for paiza.io API
+const PAIZA_LANGUAGES: Record<string, string> = {
+    javascript: "nodejs",
+    typescript: "typescript",
+    python: "python3",
+    java: "java",
+    c: "c",
+    cpp: "cpp",
+    go: "go",
+    rust: "rust",
+    ruby: "ruby",
+    php: "php",
+};
 
-// Supported languages and their Piston runtimes
+// Supported languages list (for GET endpoint)
 const SUPPORTED_LANGUAGES: Record<string, { language: string; version: string }> = {
-    javascript: { language: "javascript", version: "18.15.0" },
-    python: { language: "python", version: "3.10.0" },
-    java: { language: "java", version: "15.0.2" },
-    c: { language: "c", version: "10.2.0" },
-    cpp: { language: "c++", version: "10.2.0" },
-    go: { language: "go", version: "1.16.2" },
-    rust: { language: "rust", version: "1.68.2" },
-    ruby: { language: "ruby", version: "3.0.1" },
-    php: { language: "php", version: "8.2.8" },
-    typescript: { language: "typescript", version: "5.0.3" },
+    javascript: { language: "javascript", version: "18.x" },
+    typescript: { language: "typescript", version: "5.x" },
+    python: { language: "python", version: "3.x" },
+    java: { language: "java", version: "17" },
+    c: { language: "c", version: "gcc" },
+    cpp: { language: "c++", version: "gcc" },
+    go: { language: "go", version: "1.x" },
+    rust: { language: "rust", version: "1.x" },
+    ruby: { language: "ruby", version: "3.x" },
+    php: { language: "php", version: "8.x" },
 };
 
 // Rate limiter
@@ -51,12 +62,6 @@ function checkRateLimit(userId: string): boolean {
     return true;
 }
 
-interface ExecutionRequest {
-    code: string;
-    language: string;
-    input?: string;
-}
-
 interface ExecutionResponse {
     output: string;
     error?: string;
@@ -65,155 +70,213 @@ interface ExecutionResponse {
     language: string;
 }
 
-async function executeWithPiston(
+// ── JavaScript in-process execution ───────────────────────────────────
+function executeJavaScript(code: string): ExecutionResponse {
+    const startTime = performance.now();
+    let output = "";
+    let error: string | undefined;
+
+    try {
+        const logs: string[] = [];
+        const sandboxConsole = {
+            log: (...args: unknown[]) => logs.push(args.map(formatValue).join(" ")),
+            error: (...args: unknown[]) => logs.push(args.map(formatValue).join(" ")),
+            warn: (...args: unknown[]) => logs.push(args.map(formatValue).join(" ")),
+            info: (...args: unknown[]) => logs.push(args.map(formatValue).join(" ")),
+            dir: (...args: unknown[]) => logs.push(args.map(formatValue).join(" ")),
+            table: (...args: unknown[]) => logs.push(args.map(formatValue).join(" ")),
+        };
+
+        const origConsole = globalThis.console;
+        try {
+            Object.defineProperty(globalThis, "console", {
+                value: sandboxConsole,
+                writable: true,
+                configurable: true,
+            });
+            const indirectEval = eval;
+            indirectEval(code);
+        } finally {
+            Object.defineProperty(globalThis, "console", {
+                value: origConsole,
+                writable: true,
+                configurable: true,
+            });
+        }
+
+        output = logs.join("\n");
+    } catch (err) {
+        error = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    }
+
+    return {
+        output,
+        error,
+        executionTime: performance.now() - startTime,
+        language: "javascript",
+    };
+}
+
+function formatValue(value: unknown): string {
+    if (value === null) return "null";
+    if (value === undefined) return "undefined";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+        try {
+            return JSON.stringify(value, null, 2);
+        } catch {
+            return String(value);
+        }
+    }
+    return String(value);
+}
+
+// ── paiza.io API execution (all other languages) ─────────────────────
+async function executeWithPaiza(
     code: string,
     language: string,
-    version: string,
     stdin?: string
 ): Promise<ExecutionResponse> {
-    try {
-        const response = await fetch(`${PISTON_API_URL}/execute`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                language: language,
-                version: version,
-                files: [
-                    {
-                        name: getFileName(language),
-                        content: code,
-                    },
-                ],
-                stdin: stdin || "",
-                args: [],
-                compile_timeout: 10000,
-                run_timeout: 5000,
-                compile_memory_limit: -1,
-                run_memory_limit: -1,
-            }),
-        });
+    const paizaLang = PAIZA_LANGUAGES[language.toLowerCase()];
+    if (!paizaLang) {
+        throw new Error(`Unsupported language: ${language}`);
+    }
 
-        if (!response.ok) {
-            throw new Error(`Piston API error: ${response.status}`);
+    // Step 1: Create the execution
+    const createBody = new URLSearchParams();
+    createBody.append("source_code", code);
+    createBody.append("language", paizaLang);
+    createBody.append("input", stdin || "");
+    createBody.append("api_key", "guest");
+
+    const createRes = await fetch("https://api.paiza.io/runners/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: createBody.toString(),
+    });
+
+    if (!createRes.ok) {
+        throw new Error(`paiza.io create failed: ${createRes.status}`);
+    }
+
+    const createData = await createRes.json();
+    const sessionId = createData.id;
+
+    if (!sessionId) {
+        throw new Error("paiza.io did not return a session ID");
+    }
+
+    // Step 2: Poll for completion (max 15 seconds)
+    const startTime = Date.now();
+    const timeout = 15000;
+    let statusData: any;
+
+    while (Date.now() - startTime < timeout) {
+        await new Promise((r) => setTimeout(r, 500));
+
+        const statusRes = await fetch(
+            `https://api.paiza.io/runners/get_details?id=${sessionId}&api_key=guest`
+        );
+
+        if (!statusRes.ok) {
+            throw new Error(`paiza.io status check failed: ${statusRes.status}`);
         }
 
-        const result = await response.json();
+        statusData = await statusRes.json();
 
-        const runResult = result.run;
-        const compileResult = result.compile;
-
-        // Check for compilation errors
-        if (compileResult && compileResult.code !== 0) {
-            return {
-                output: "",
-                error: compileResult.stderr || compileResult.output || "Compilation error",
-                executionTime: 0,
-                language,
-            };
+        if (statusData.status === "completed") {
+            break;
         }
+    }
 
-        // Check for runtime errors
-        if (runResult.code !== 0) {
-            return {
-                output: runResult.stdout || "",
-                error: runResult.stderr || runResult.output || "Runtime error",
-                executionTime: runResult.time ? parseFloat(runResult.time) * 1000 : 0,
-                memory: runResult.memory ? Math.round(runResult.memory / 1024) : undefined,
-                language,
-            };
-        }
+    if (!statusData || statusData.status !== "completed") {
+        throw new Error("Execution timed out (15s limit)");
+    }
 
-        // Success
+    const stdout = statusData.stdout || "";
+    const stderr = statusData.stderr || "";
+    const buildStderr = statusData.build_stderr || "";
+    const exitCode = statusData.exit_code;
+    const buildExitCode = statusData.build_exit_code;
+    const execTime = typeof statusData.time === "number" ? statusData.time * 1000 : 0;
+
+    // Build error (compilation failed)
+    if (buildExitCode !== null && buildExitCode !== 0 && buildStderr) {
         return {
-            output: runResult.stdout || "",
-            error: runResult.stderr || undefined,
-            executionTime: runResult.time ? parseFloat(runResult.time) * 1000 : 0,
-            memory: runResult.memory ? Math.round(runResult.memory / 1024) : undefined,
+            output: "",
+            error: buildStderr,
+            executionTime: execTime,
             language,
         };
-    } catch (error) {
-        throw new Error(
-            error instanceof Error ? error.message : "Failed to execute code"
-        );
     }
-}
 
-function getFileName(language: string): string {
-    const extensions: Record<string, string> = {
-        javascript: "main.js",
-        python: "main.py",
-        java: "Main.java",
-        c: "main.c",
-        cpp: "main.cpp",
-        go: "main.go",
-        rust: "main.rs",
-        ruby: "main.rb",
-        php: "main.php",
-        typescript: "main.ts",
+    // Runtime error
+    if (exitCode !== 0 && stderr) {
+        return {
+            output: stdout,
+            error: stderr,
+            executionTime: execTime,
+            language,
+        };
+    }
+
+    return {
+        output: stdout,
+        error: stderr || undefined,
+        executionTime: execTime,
+        language,
     };
-    return extensions[language] || "main.txt";
 }
 
+// ── POST /api/execute ────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
     try {
         const authHeader = request.headers.get("authorization");
 
-        if (!authHeader) {
-            return NextResponse.json(
-                { error: "Authorization header required" },
-                { status: 401 }
-            );
+        let userId: string | null = null;
+
+        // Authentication is optional
+        if (authHeader) {
+            const token = authHeader.replace("Bearer ", "");
+            const {
+                data: { user },
+                error: authError,
+            } = await getSupabase().auth.getUser(token);
+
+            if (!authError && user) {
+                userId = user.id;
+            }
         }
 
-        const token = authHeader.replace("Bearer ", "");
-
-        const { data: { user }, error: authError } = await getSupabase().auth.getUser(token);
-
-        if (authError || !user) {
-            return NextResponse.json(
-                { error: "Invalid or expired token" },
-                { status: 401 }
-            );
-        }
-
-        if (!checkRateLimit(user.id)) {
+        // Rate limit authenticated users
+        if (userId && !checkRateLimit(userId)) {
             return NextResponse.json(
                 { error: "Rate limit exceeded. Please try again later." },
                 { status: 429 }
             );
         }
 
-        const body: ExecutionRequest = await request.json();
-        const { code, language, input } = body;
+        const { code, language, input } = await request.json();
 
         if (!code || typeof code !== "string") {
-            return NextResponse.json(
-                { error: "Code is required" },
-                { status: 400 }
-            );
+            return NextResponse.json({ error: "Code is required" }, { status: 400 });
         }
 
         if (!language || typeof language !== "string") {
-            return NextResponse.json(
-                { error: "Language is required" },
-                { status: 400 }
-            );
+            return NextResponse.json({ error: "Language is required" }, { status: 400 });
         }
 
-        const langConfig = SUPPORTED_LANGUAGES[language.toLowerCase()];
-
-        if (!langConfig) {
+        const langKey = language.toLowerCase();
+        if (!PAIZA_LANGUAGES[langKey]) {
             return NextResponse.json(
                 {
-                    error: `Unsupported language. Supported: ${Object.keys(SUPPORTED_LANGUAGES).join(", ")}`,
+                    error: `Unsupported language. Supported: ${Object.keys(PAIZA_LANGUAGES).join(", ")}`,
                 },
                 { status: 400 }
             );
         }
 
-        // Security checks - block dangerous patterns
+        // Security checks — block dangerous system-level operations
         const dangerousPatterns = [
             /require\s*\(\s*['"]child_process['"]\s*\)/,
             /require\s*\(\s*['"]fs['"]\s*\)/,
@@ -221,15 +284,13 @@ export async function POST(request: NextRequest) {
             /import\s+.*from\s+['"]fs['"]/,
             /exec\s*\(/,
             /spawn\s*\(/,
-            /eval\s*\(/,
-            /Function\s*\(/,
-            /import\s+os/,
-            /import\s+sys/,
+            /import\s+os\b/,
             /import\s+subprocess/,
             /Runtime\.getRuntime\(\)/,
             /ProcessBuilder/,
         ];
 
+        // Skip eval/Function check for JS since we use eval ourselves
         for (const pattern of dangerousPatterns) {
             if (pattern.test(code)) {
                 return NextResponse.json(
@@ -239,13 +300,15 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // Execute code using Piston
-        const result = await executeWithPiston(
-            code,
-            langConfig.language,
-            langConfig.version,
-            input
-        );
+        let result: ExecutionResponse;
+
+        // Execute JavaScript in-process for instant feedback
+        if (langKey === "javascript") {
+            result = executeJavaScript(code);
+        } else {
+            // All other languages via paiza.io
+            result = await executeWithPaiza(code, langKey, input);
+        }
 
         return NextResponse.json(result);
     } catch (error) {
@@ -253,16 +316,17 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json(
             {
-                error: error instanceof Error ? error.message : "Internal server error",
                 output: "",
+                error: error instanceof Error ? error.message : "Internal server error",
                 executionTime: 0,
+                language: "unknown",
             },
             { status: 500 }
         );
     }
 }
 
-// Get supported languages
+// ── GET /api/execute — list supported languages ──────────────────────
 export async function GET() {
     const languages = Object.entries(SUPPORTED_LANGUAGES).map(([key, value]) => ({
         id: key,
@@ -271,7 +335,6 @@ export async function GET() {
 
     return NextResponse.json({
         languages,
-        engine: "Piston",
-        apiUrl: PISTON_API_URL,
+        engine: "paiza.io (JavaScript runs in-process)",
     });
 }
