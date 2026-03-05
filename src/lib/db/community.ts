@@ -93,10 +93,13 @@ export const communityDb = {
             .from('shared_designs')
             .select(`
                 *,
-                user:users (
+                user:profiles (
                     id,
-                    name,
-                    avatar_url
+                    display_name,
+                    full_name,
+                    avatar_url,
+                    xp,
+                    current_streak
                 )
             `)
             .eq('is_public', true)
@@ -128,8 +131,9 @@ export const communityDb = {
             ...design,
             user: design.user ? {
                 ...design.user,
-                score: 0,
-                streak: 0,
+                name: design.user.display_name || design.user.full_name,
+                score: design.user.xp || 0,
+                streak: design.user.current_streak || 0,
             } : null,
         }));
     },
@@ -141,10 +145,13 @@ export const communityDb = {
             .from('shared_designs')
             .select(`
                 *,
-                user:users (
+                user:profiles (
                     id,
-                    name,
-                    avatar_url
+                    display_name,
+                    full_name,
+                    avatar_url,
+                    xp,
+                    current_streak
                 )
             `)
             .eq('id', id)
@@ -209,8 +216,9 @@ export const communityDb = {
             ...design,
             user: design.user ? {
                 ...design.user,
-                score: 0,
-                streak: 0,
+                name: design.user.display_name || design.user.full_name,
+                score: design.user.xp || 0,
+                streak: design.user.current_streak || 0,
             } : null,
         };
     },
@@ -237,7 +245,13 @@ export const communityDb = {
             return [];
         }
 
-        return data || [];
+        return (data || []).map((comment: any) => ({
+            ...comment,
+            user: comment.user ? {
+                ...comment.user,
+                name: comment.user.display_name || comment.user.full_name
+            } : null
+        }));
     },
 
     async createDesignComment(input: {
@@ -328,8 +342,9 @@ export const communityDb = {
             ...disc,
             user: disc.user ? {
                 ...disc.user,
-                score: 0,
-                streak: 0,
+                name: disc.user.display_name || disc.user.full_name,
+                score: disc.user.xp || 0,
+                streak: disc.user.current_streak || 0,
             } : null,
         }));
     },
@@ -373,10 +388,17 @@ export const communityDb = {
             ...discussion,
             user: discussion.user ? {
                 ...discussion.user,
-                score: 0,
-                streak: 0,
+                name: discussion.user.display_name || discussion.user.full_name,
+                score: discussion.user.xp || 0,
+                streak: discussion.user.current_streak || 0,
             } : null,
-            replies: (replies || []) as ReplyWithUser[],
+            replies: (replies || []).map((reply: any) => ({
+                ...reply,
+                user: reply.user ? {
+                    ...reply.user,
+                    name: reply.user.display_name || reply.user.full_name
+                } : null
+            })) as ReplyWithUser[],
         };
     },
 
@@ -474,7 +496,15 @@ export const communityDb = {
 
         await this.updateUserScore(input.user_id, 2);
 
-        return reply as ReplyWithUser;
+        const replyToReturn = {
+            ...reply,
+            user: reply.user ? {
+                ...reply.user,
+                name: reply.user.display_name || reply.user.full_name
+            } : null
+        };
+
+        return replyToReturn as ReplyWithUser;
     },
 
     async toggleLike(userId: string, type: 'design' | 'discussion' | 'reply' | 'comment', id: string): Promise<{ liked: boolean; count: number }> {
@@ -522,16 +552,10 @@ export const communityDb = {
         const supabase = getServerClient();
 
         const { data, error } = await supabase
-            .from('user_scores')
-            .select(`
-                *,
-                user:users (
-                    id,
-                    name,
-                    avatar_url
-                )
-            `)
-            .order('score', { ascending: false })
+            .from('profiles')
+            .select('id, display_name, full_name, avatar_url, xp, current_streak, email')
+            .eq('leaderboard_visible', true)
+            .order('xp', { ascending: false })
             .limit(50);
 
         if (error) {
@@ -541,16 +565,18 @@ export const communityDb = {
 
         return (data || []).map((entry: any, index: number) => ({
             rank: index + 1,
-            user_id: entry.user_id,
-            score: entry.score,
-            streak: entry.streak,
+            user_id: entry.id,
+            score: entry.xp || 0,
+            streak: entry.current_streak || 0,
             change: 0,
-            user: entry.user ? {
-                ...entry.user,
-                score: entry.score,
-                streak: entry.streak,
+            user: {
+                id: entry.id,
+                name: entry.display_name || entry.full_name || (entry.email ? entry.email.split('@')[0] : 'Anonymous'),
+                avatar_url: entry.avatar_url,
+                score: entry.xp || 0,
+                streak: entry.current_streak || 0,
                 badges: [],
-            } : null,
+            },
         }));
     },
 
@@ -562,66 +588,39 @@ export const communityDb = {
     }> {
         const supabase = getServerClient();
 
-        const [designsResult, discussionsResult, usersResult] = await Promise.all([
+        const activeTodayStr = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        
+        const [designsResult, discussionsResult, usersResult, activeTodayResult] = await Promise.all([
             supabase.from('shared_designs').select('id', { count: 'exact', head: true }),
             supabase.from('discussions').select('id', { count: 'exact', head: true }),
-            supabase.from('user_scores').select('id', { count: 'exact', head: true }),
+            supabase.from('profiles').select('id', { count: 'exact', head: true }),
+            supabase.from('profiles').select('id', { count: 'exact', head: true }).gte('updated_at', activeTodayStr),
         ]);
 
         return {
             totalDesigns: designsResult.count || 0,
             totalDiscussions: discussionsResult.count || 0,
             totalUsers: usersResult.count || 0,
-            activeToday: Math.floor((usersResult.count || 0) * 0.1),
+            activeToday: activeTodayResult.count || 0,
         };
     },
 
     async updateUserScore(userId: string, points: number): Promise<void> {
         const supabase = getServerClient();
 
-        const { data: existing } = await supabase
-            .from('user_scores')
-            .select('*')
-            .eq('user_id', userId)
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('xp')
+            .eq('id', userId)
             .single();
 
-        const today = new Date().toISOString().split('T')[0];
-
-        if (existing) {
-            const lastActivity = existing.last_activity_date;
-            let newStreak = existing.streak || 0;
-
-            if (lastActivity) {
-                const lastDate = new Date(lastActivity);
-                const todayDate = new Date(today);
-                const diffDays = Math.floor((todayDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
-
-                if (diffDays === 1) {
-                    newStreak = (existing.streak || 0) + 1;
-                } else if (diffDays > 1) {
-                    newStreak = 1;
-                }
-            } else {
-                newStreak = 1;
-            }
-
+        if (profile) {
             await supabase
-                .from('user_scores')
+                .from('profiles')
                 .update({
-                    score: (existing.score || 0) + points,
-                    streak: newStreak,
-                    last_activity_date: today,
+                    xp: (profile.xp || 0) + points,
                 })
-                .eq('user_id', userId);
-        } else {
-            await supabase
-                .from('user_scores')
-                .insert({
-                    user_id: userId,
-                    score: points,
-                    streak: 1,
-                    last_activity_date: today,
-                });
+                .eq('id', userId);
         }
     },
 
