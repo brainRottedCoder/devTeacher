@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, memo } from "react";
 import {
     InfrastructureComponent,
     ComponentType,
@@ -17,7 +17,7 @@ interface SimulationCanvasProps {
     onDeleteComponent: (id: string) => void;
 }
 
-export function SimulationCanvas({
+export const SimulationCanvas = memo(function SimulationCanvas({
     components,
     selectedComponent,
     onSelectComponent,
@@ -139,7 +139,7 @@ export function SimulationCanvas({
     return (
         <div
             ref={canvasRef}
-            className="relative w-full h-full bg-[#0a0a0f] rounded-xl overflow-hidden border border-white/10"
+            className="relative w-full h-full bg-[#0a0a0f] rounded-xl overflow-hidden border border-white/10 select-none"
             onClick={handleCanvasClick}
             onContextMenu={handleCanvasContextMenu}
             onMouseMove={handleMouseMove}
@@ -149,8 +149,8 @@ export function SimulationCanvas({
             {/* Grid background */}
             <div className="absolute inset-0 bg-grid opacity-30" />
 
-            {/* Connection lines */}
-            <svg className="absolute inset-0 pointer-events-none">
+            {/* Connection lines - simplified for performance */}
+            <svg className="absolute inset-0 pointer-events-none w-full h-full">
                 {components.map((component) =>
                     component.connections.map((targetId) => {
                         const target = components.find((c) => c.id === targetId);
@@ -161,16 +161,8 @@ export function SimulationCanvas({
                         const x2 = target.position.x + 60;
                         const y2 = target.position.y + 40;
 
-                        // Calculate animation speed based on source component RPS
-                        // Fast traffic = 0.2s duration, Slow traffic = 2s duration. 0 RP/S = paused.
                         const rps = component.metrics.requestsPerSecond || 0;
-                        const isTrafficActive = rps > 0;
-                        const minDuration = 0.2;
-                        const maxDuration = 2;
-                        // Logarithmic scale so high numbers scale gracefully
-                        const duration = isTrafficActive
-                            ? Math.max(minDuration, maxDuration - Math.log10(rps + 1) * 0.4)
-                            : 0;
+                        const isActive = rps > 0;
 
                         return (
                             <line
@@ -180,12 +172,9 @@ export function SimulationCanvas({
                                 x2={x2}
                                 y2={y2}
                                 stroke="url(#lineGradient)"
-                                strokeWidth={isTrafficActive ? "3" : "2"}
-                                strokeDasharray="5, 5"
-                                className={isTrafficActive ? "animate-dash-flow" : "opacity-30"}
-                                style={{
-                                    animationDuration: `${duration}s`,
-                                }}
+                                strokeWidth={isActive ? 2.5 : 1.5}
+                                strokeDasharray={isActive ? "8, 4" : "4, 4"}
+                                className={isActive ? "opacity-80" : "opacity-30"}
                             />
                         );
                     })
@@ -316,4 +305,4 @@ export function SimulationCanvas({
             )}
         </div>
     );
-}
+});

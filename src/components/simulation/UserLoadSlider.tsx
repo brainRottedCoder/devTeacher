@@ -28,6 +28,20 @@ export function UserLoadSlider({ users, onChange }: UserLoadSliderProps) {
         onChange(value);
     };
 
+    // Helper to format large numbers
+    const formatNumber = (num: number): string => {
+        if (num >= 100000000) {
+            return `${(num / 100000000).toFixed(0)}B`;
+        }
+        if (num >= 1000000) {
+            return `${(num / 1000000).toFixed(0)}M`;
+        }
+        if (num >= 1000) {
+            return `${(num / 1000).toFixed(0)}K`;
+        }
+        return num.toLocaleString();
+    };
+
     return (
         <div className="glass-card p-4">
             <div className="flex items-center justify-between mb-4">
@@ -89,12 +103,12 @@ export function UserLoadSlider({ users, onChange }: UserLoadSliderProps) {
             </div>
 
             {/* Quick select buttons */}
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-1.5">
                 {USER_LEVELS.map((level) => (
                     <button
                         key={level.value}
                         onClick={() => handleQuickSelect(level.value)}
-                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all ${users === level.value
+                        className={`py-1.5 px-2.5 rounded-lg text-xs font-medium transition-all ${users === level.value
                                 ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/25"
                                 : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10"
                             }`}
@@ -107,8 +121,8 @@ export function UserLoadSlider({ users, onChange }: UserLoadSliderProps) {
             {/* Current value display */}
             <div className="mt-4 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="text-4xl font-bold text-gradient mb-1">
-                        {users.toLocaleString()}
+                    <div className="text-3xl sm:text-4xl font-bold text-gradient mb-1 truncate max-w-[200px]">
+                        {formatNumber(users)}
                     </div>
                     <div className="text-sm text-gray-400">simulated users</div>
                 </div>

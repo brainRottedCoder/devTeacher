@@ -37,6 +37,14 @@ export async function GET(request: NextRequest) {
 
         if (error) {
             console.error("Leaderboard fetch error:", error);
+            // If gamification columns haven't been added yet (migration 007), return empty leaderboard
+            if (error.code === '42703') {
+                return NextResponse.json({
+                    entries: [],
+                    currentUserRank: null,
+                    message: "Leaderboard is not yet configured. Run the gamification migration (007_gamification.sql) to enable it."
+                });
+            }
             return NextResponse.json({ error: "Failed to fetch leaderboard" }, { status: 500 });
         }
 

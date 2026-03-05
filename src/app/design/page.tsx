@@ -100,6 +100,7 @@ function DesignStudio() {
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [showAnalysis, setShowAnalysis] = useState(false);
+    const [isAiPowered, setIsAiPowered] = useState(false);
     const [showScalability, setShowScalability] = useState(false);
     const [showShareModal, setShowShareModal] = useState(false);
     const [shareForm, setShareForm] = useState({
@@ -251,11 +252,36 @@ function DesignStudio() {
     const handleAnalyze = useCallback(async () => {
         setIsAnalyzing(true);
         setShowAnalysis(true);
+        setIsAiPowered(false);
         try {
+            // Try AI-powered analysis first
+            const res = await fetch("/api/ai/design/analyze", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ nodes, edges }),
+            });
+
+            let data: any;
+            try { data = await res.json(); } catch { data = null; }
+
+            if (res.ok && data && !data.fallbackToStatic && data.overallScore !== undefined) {
+                setAnalysisResult(data as AnalysisResult);
+                setIsAiPowered(true);
+                return;
+            }
+
+            // Fallback to static analysis
+            console.warn("AI analysis unavailable, using static analysis.", data?.error);
             const result = await analyzeArchitecture(nodes, edges);
             setAnalysisResult(result);
         } catch (error) {
-            console.error("Analysis failed:", error);
+            console.error("Analysis failed, using static fallback:", error);
+            try {
+                const result = await analyzeArchitecture(nodes, edges);
+                setAnalysisResult(result);
+            } catch (fallbackErr) {
+                console.error("Static analysis also failed:", fallbackErr);
+            }
         } finally {
             setIsAnalyzing(false);
         }
@@ -323,6 +349,15 @@ function DesignStudio() {
         }
     };
 
+    // Example prompts for the AI bar
+    const AI_EXAMPLE_PROMPTS = [
+        "Real-time chat app for 10M users",
+        "E-commerce platform with payments",
+        "Video streaming like YouTube",
+        "IoT sensor data pipeline",
+        "Social media with news feed",
+    ];
+
     // AI Architecture Generate handler
     const handleAIGenerate = useCallback(async () => {
         if (!aiPrompt.trim() || isGenerating) return;
@@ -334,21 +369,81 @@ function DesignStudio() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ prompt: aiPrompt.trim() }),
             });
-            const data = await res.json();
+
+            let data: any;
+            try {
+                data = await res.json();
+            } catch {
+                setAiError("Received an invalid response. Please try again.");
+                return;
+            }
+
+            // Detect service worker interference (returns {queued: true, offline: true})
+            if (data.queued || data.offline) {
+                console.warn("AI request was intercepted by service worker. Unregistering stale SW...");
+                // Auto-fix: unregister the stale service worker
+                if ("serviceWorker" in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    for (const reg of registrations) {
+                        await reg.unregister();
+                    }
+                }
+                setAiError("Request was intercepted by an old cache. Please hard-refresh the page (Ctrl+Shift+R) and try again.");
+                return;
+            }
+
             if (!res.ok) {
                 setAiError(data.error || "Failed to generate architecture.");
                 return;
             }
+
             if (data.nodes && data.edges) {
-                // Validate and sanitize the response
-                const validNodes = Array.isArray(data.nodes) ? data.nodes : [];
-                const validEdges = Array.isArray(data.edges) ? data.edges : [];
-                
+                const rawNodes = Array.isArray(data.nodes) ? data.nodes : [];
+                const rawEdges = Array.isArray(data.edges) ? data.edges : [];
+
+                // Validate each node has required fields
+                const validNodes = rawNodes.filter(
+                    (n: any) =>
+                        n.id &&
+                        n.type === "architecture" &&
+                        n.data?.type &&
+                        n.data?.label &&
+                        n.position?.x !== undefined &&
+                        n.position?.y !== undefined
+                );
+
                 if (validNodes.length === 0) {
-                    setAiError("AI couldn't generate any components. Try a different prompt.");
+                    setAiError("AI couldn't generate valid components. Try a more specific prompt.");
                     return;
                 }
-                
+
+                // Only keep edges that reference existing node IDs
+                const nodeIds = new Set(validNodes.map((n: any) => n.id));
+                const validEdges = rawEdges.filter(
+                    (e: any) => e.source && e.target && nodeIds.has(e.source) && nodeIds.has(e.target)
+                );
+
+                // Spread overlapping nodes apart
+                const MIN_DIST_X = 280;
+                const MIN_DIST_Y = 120;
+                for (let i = 0; i < validNodes.length; i++) {
+                    for (let j = i + 1; j < validNodes.length; j++) {
+                        const a = validNodes[i] as any;
+                        const b = validNodes[j] as any;
+                        const dx = Math.abs(a.position.x - b.position.x);
+                        const dy = Math.abs(a.position.y - b.position.y);
+                        if (dx < MIN_DIST_X && dy < MIN_DIST_Y) {
+                            // Push the second node away
+                            if (dx < MIN_DIST_X) {
+                                b.position.x += (MIN_DIST_X - dx) * (b.position.x >= a.position.x ? 1 : -1);
+                            }
+                            if (dy < MIN_DIST_Y) {
+                                b.position.y += (MIN_DIST_Y - dy) * (b.position.y >= a.position.y ? 1 : -1);
+                            }
+                        }
+                    }
+                }
+
                 setNodes(validNodes as Node[]);
                 setEdges(validEdges as Edge[]);
                 setDesignName(`AI: ${aiPrompt.trim().slice(0, 40)}`);
@@ -356,11 +451,12 @@ function DesignStudio() {
                 setShowAiBar(false);
                 setAiPrompt("");
             } else {
-                setAiError("Invalid response from AI. Please try again.");
+                console.error("AI response missing nodes/edges:", JSON.stringify(data).slice(0, 300));
+                setAiError(data.error || "AI returned an unexpected response. Please try again.");
             }
         } catch (err) {
             console.error("AI generate error:", err);
-            setAiError("Network error. Please try again.");
+            setAiError("Could not reach AI service. Check your connection and try again.");
         } finally {
             setIsGenerating(false);
         }
@@ -511,6 +607,7 @@ function DesignStudio() {
                                 onDragOver={onDragOver}
                                 nodeTypes={nodeTypes}
                                 fitView
+                                fitViewOptions={{ padding: 0.3 }}
                                 snapToGrid
                                 snapGrid={[15, 15]}
                                 defaultEdgeOptions={{
@@ -591,6 +688,19 @@ function DesignStudio() {
                                                 )}
                                             </button>
                                         </div>
+                                        {!isGenerating && !aiError && (
+                                            <div className="flex flex-wrap gap-1.5 mt-2">
+                                                {AI_EXAMPLE_PROMPTS.map((example) => (
+                                                    <button
+                                                        key={example}
+                                                        onClick={() => setAiPrompt(example)}
+                                                        className="px-2.5 py-1 rounded-lg text-[11px] text-slate-400 bg-white/[0.04] border border-white/[0.06] hover:bg-amber-500/10 hover:text-amber-300 hover:border-amber-500/20 transition-all duration-200"
+                                                    >
+                                                        {example}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
                                         {aiError && (
                                             <p className="mt-2 text-xs text-red-400 bg-red-500/10 px-3 py-2 rounded-lg border border-red-500/20">
                                                 {aiError}
@@ -787,10 +897,11 @@ function DesignStudio() {
                             ) : showAnalysis ? (
                                 <>
                                     <div className="flex-1 overflow-hidden">
-                                        <AnalysisPanel
+                                    <AnalysisPanel
                                             analysis={analysisResult}
                                             isAnalyzing={isAnalyzing}
                                             onReanalyze={handleAnalyze}
+                                            isAiPowered={isAiPowered}
                                         />
                                     </div>
                                     <button

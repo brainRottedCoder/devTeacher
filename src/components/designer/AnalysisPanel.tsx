@@ -7,12 +7,14 @@ interface AnalysisPanelProps {
     analysis: AnalysisResult | null;
     isAnalyzing: boolean;
     onReanalyze: () => void;
+    isAiPowered?: boolean;
 }
 
 export default function AnalysisPanel({
     analysis,
     isAnalyzing,
     onReanalyze,
+    isAiPowered = false,
 }: AnalysisPanelProps) {
     const [activeTab, setActiveTab] = useState<"issues" | "suggestions" | "cost">("issues");
     const [expandedIssue, setExpandedIssue] = useState<string | null>(null);
@@ -21,7 +23,7 @@ export default function AnalysisPanel({
     // Early return states
     if (!analysis && !isAnalyzing) {
         return (
-            <div className="w-96 bg-slate-900/50 border-l border-slate-700/50 p-4 flex flex-col items-center justify-center">
+            <div className="w-full bg-slate-900/50 border-l border-slate-700/50 p-4 flex flex-col items-center justify-center">
                 <div className="text-center">
                     <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-cyan-500/20 to-purple-500/20 flex items-center justify-center">
                         <svg
@@ -55,12 +57,22 @@ export default function AnalysisPanel({
 
     if (isAnalyzing) {
         return (
-            <div className="w-96 bg-slate-900/50 border-l border-slate-700/50 p-4 flex flex-col items-center justify-center">
-                <div className="animate-spin w-12 h-12 border-4 border-cyan-500 border-t-transparent rounded-full mb-4" />
-                <h3 className="text-lg font-semibold text-white mb-2">Analyzing Architecture...</h3>
-                <p className="text-slate-400 text-sm text-center">
-                    Our AI is reviewing your design for issues, bottlenecks, and improvement opportunities
+            <div className="w-full bg-slate-900/50 border-l border-slate-700/50 p-4 flex flex-col items-center justify-center">
+                <div className="relative mb-6">
+                    <div className="animate-spin w-14 h-14 border-4 border-cyan-500 border-t-transparent rounded-full" />
+                    <div className="absolute inset-0 animate-ping w-14 h-14 border-2 border-cyan-400/20 rounded-full" />
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-2">AI is Analyzing...</h3>
+                <p className="text-slate-400 text-sm text-center max-w-[260px]">
+                    Reviewing your architecture for scalability, security, reliability, and performance
                 </p>
+                <div className="mt-4 flex flex-wrap gap-2 justify-center">
+                    {["SPOF", "Security", "Scalability", "Cost"].map((tag) => (
+                        <span key={tag} className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 animate-pulse">
+                            {tag}
+                        </span>
+                    ))}
+                </div>
             </div>
         );
     }
@@ -101,18 +113,25 @@ export default function AnalysisPanel({
     // If we reach here but analysis is null, show a message
     if (!analysis) {
         return (
-            <div className="w-96 bg-slate-900/50 border-l border-slate-700/50 p-4 flex flex-col items-center justify-center">
+            <div className="w-full bg-slate-900/50 border-l border-slate-700/50 p-4 flex flex-col items-center justify-center">
                 <p className="text-slate-400">No analysis data available</p>
             </div>
         );
     }
 
     return (
-        <div className="w-96 bg-slate-900/50 border-l border-slate-700/50 flex flex-col h-full overflow-hidden">
+        <div className="w-full bg-slate-900/50 border-l border-slate-700/50 flex flex-col h-full overflow-hidden">
             {/* Header with Score */}
             <div className="p-4 border-b border-slate-700/50">
                 <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-lg font-semibold text-white">Architecture Review</h3>
+                    <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-semibold text-white">Architecture Review</h3>
+                        {isAiPowered && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gradient-to-r from-violet-500/20 to-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-[0_0_12px_rgba(6,182,212,0.15)]">
+                                <span className="text-violet-400">✦</span> AI
+                            </span>
+                        )}
+                    </div>
                     <button
                         onClick={onReanalyze}
                         className="p-2 hover:bg-slate-700/50 rounded-lg transition-colors"

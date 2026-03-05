@@ -152,12 +152,13 @@ export default function SimulatorPage() {
                     </div>
 
                     {/* Main content - Full screen layout */}
-                    <div className="flex h-[calc(100vh-100px)]">
+                    <div className="flex h-[calc(100vh-85px)] overflow-hidden">
                         {/* Left sidebar - Controls */}
-                        <div className="w-[340px] border-r border-white/[0.08] bg-surface-deep/80 backdrop-blur-xl shadow-[4px_0_24px_rgba(0,0,0,0.5)] z-10 flex flex-col overflow-y-auto p-5 space-y-5 flex-shrink-0">
-                            <div className="bg-white/[0.02] p-4 rounded-xl border border-white/[0.05] shadow-inner">
-                                <UserLoadSlider users={state.users} onChange={handleUsersChange} />
-                            </div>
+                        <div className="w-[320px] lg:w-[340px] border-r border-white/[0.08] bg-surface-deep/80 backdrop-blur-xl shadow-[4px_0_24px_rgba(0,0,0,0.5)] z-10 flex flex-col overflow-hidden flex-shrink-0">
+                            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                                <div className="bg-white/[0.02] p-4 rounded-xl border border-white/[0.05] shadow-inner">
+                                    <UserLoadSlider users={state.users} onChange={handleUsersChange} />
+                                </div>
 
                                 {/* Instructions */}
                                 <div className="glass-card p-4">
@@ -215,24 +216,22 @@ export default function SimulatorPage() {
                                     </div>
                                 </div>
                             </div>
+                        </div>
 
                         {/* Center - Canvas */}
-                        <div className="flex-1 relative">
-                            <div className="absolute inset-0">
-                                <SimulationCanvas
-                                        components={state.components}
-                                        selectedComponent={selectedComponent}
-                                        onSelectComponent={handleSelectComponent}
-                                        onAddComponent={handleAddComponent}
-                                        onMoveComponent={handleMoveComponent}
-                                        onDeleteComponent={handleDeleteComponent}
-                                    />
-                                </div>
-                            </div>
+                        <div className="flex-1 relative overflow-hidden">
+                            <SimulationCanvas
+                                components={state.components}
+                                selectedComponent={selectedComponent}
+                                onSelectComponent={handleSelectComponent}
+                                onAddComponent={handleAddComponent}
+                                onMoveComponent={handleMoveComponent}
+                                onDeleteComponent={handleDeleteComponent}
+                            />
 
                             {/* Right sidebar - Metrics */}
-                            <div className="w-[360px] border-l border-white/[0.08] bg-surface-deep/80 backdrop-blur-xl shadow-[-4px_0_24px_rgba(0,0,0,0.5)] z-10 flex flex-col overflow-y-auto flex-shrink-0">
-                                <div className="flex-1 overflow-hidden p-4">
+                            <div className="w-[340px] lg:w-[360px] border-l border-white/[0.08] bg-surface-deep/80 backdrop-blur-xl shadow-[-4px_0_24px_rgba(0,0,0,0.5)] z-10 flex flex-col overflow-hidden flex-shrink-0 absolute right-0 top-0 bottom-0">
+                                <div className="flex-1 overflow-y-auto p-4">
                                     <MetricsPanel
                                         globalMetrics={state.globalMetrics}
                                         estimatedCost={state.estimatedCost}
@@ -243,33 +242,34 @@ export default function SimulatorPage() {
                                     />
                                 </div>
                             
-                            {/* Learning insights */}
-                            <div className="p-4 border-t border-white/[0.08] bg-white/[0.01]">
-                                <h3 className="text-sm font-heading font-bold text-white mb-3 flex items-center gap-2">
-                                    <span className="text-lg">🎯</span> Learning Insights
-                                </h3>
-                                <div className="flex flex-col gap-3">
-                                <InsightCard
-                                    title="Single Point of Failure"
-                                    description="If you only have one server, it becomes a bottleneck at high load. Add more servers behind a load balancer."
-                                    type={state.components.filter((c) => c.type === "server").length === 1 ? "warning" : "success"}
-                                />
-                                <InsightCard
-                                    title="Database Scaling"
-                                    description="Databases often become the bottleneck. Consider read replicas or caching to reduce load."
-                                    type={
-                                        state.bottlenecks.some((b) => b.componentId.includes("database"))
-                                            ? "warning"
-                                            : "success"
-                                    }
-                                />
-                                <InsightCard
-                                    title="Cost Efficiency"
-                                    description={`At ${state.users.toLocaleString()} users, your cost is $${(
-                                        state.estimatedCost.total * 1000
-                                    ).toFixed(2)} per 1000 requests.`}
-                                    type="info"
-                                />
+                                {/* Learning insights */}
+                                <div className="p-4 border-t border-white/[0.08] bg-white/[0.01]">
+                                    <h3 className="text-sm font-heading font-bold text-white mb-3 flex items-center gap-2">
+                                        <span className="text-lg">🎯</span> Learning Insights
+                                    </h3>
+                                    <div className="flex flex-col gap-3">
+                                        <InsightCard
+                                            title="Single Point of Failure"
+                                            description="If you only have one server, it becomes a bottleneck at high load. Add more servers behind a load balancer."
+                                            type={state.components.filter((c) => c.type === "server").length === 1 ? "warning" : "success"}
+                                        />
+                                        <InsightCard
+                                            title="Database Scaling"
+                                            description="Databases often become the bottleneck. Consider read replicas or caching to reduce load."
+                                            type={
+                                                state.bottlenecks.some((b) => b.componentId.includes("database"))
+                                                    ? "warning"
+                                                    : "success"
+                                            }
+                                        />
+                                        <InsightCard
+                                            title="Cost Efficiency"
+                                            description={`At ${state.users.toLocaleString()} users, your cost is ${(
+                                                state.estimatedCost.total * 1000
+                                            ).toFixed(2)} per 1000 requests.`}
+                                            type="info"
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         </div>

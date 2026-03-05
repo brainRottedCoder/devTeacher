@@ -11,9 +11,9 @@
  * - Learning content caching
  */
 
-const CACHE_NAME = 'sudomakeworld-v4';
-const STATIC_CACHE = 'sudomakeworld-static-v4';
-const DYNAMIC_CACHE = 'sudomakeworld-dynamic-v4';
+const CACHE_NAME = 'sudomakeworld-v5';
+const STATIC_CACHE = 'sudomakeworld-static-v5';
+const DYNAMIC_CACHE = 'sudomakeworld-dynamic-v5';
 const OFFLINE_QUEUE = 'sudomakeworld-offline-queue';
 
 // IndexedDB configuration for service worker
@@ -81,7 +81,7 @@ self.addEventListener('activate', (event) => {
         caches.keys().then((keys) => {
             return Promise.all(
                 keys
-                    .filter((key) => !key.includes('v4'))
+                    .filter((key) => !key.includes('v5'))
                     .map((key) => {
                         console.log('[SW] Deleting old cache:', key);
                         return caches.delete(key);
@@ -133,8 +133,9 @@ self.addEventListener('fetch', (event) => {
 
     // Skip non-GET requests for standard caching
     if (request.method !== 'GET') {
-        // Queue offline requests for API calls
-        if (url.pathname.startsWith('/api/')) {
+        // Queue offline requests for API calls, but NOT AI endpoints
+        // AI endpoints (chat, design generate) must hit the real server
+        if (url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/ai/')) {
             event.respondWith(queueOfflineRequest(request));
             return;
         }
@@ -150,7 +151,12 @@ self.addEventListener('fetch', (event) => {
     }
 
     // Apply caching strategies based on URL path
-    if (url.pathname.startsWith('/api/chat') || url.pathname.startsWith('/api/ai/')) {
+    // Skip AI endpoints entirely — they should never be cached or cloned
+    if (url.pathname.startsWith('/api/ai/')) {
+        return;
+    }
+
+    if (url.pathname.startsWith('/api/chat')) {
         event.respondWith(networkFirstWithIDB(request));
         return;
     }

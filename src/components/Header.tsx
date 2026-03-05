@@ -64,9 +64,9 @@ export function Header() {
                 Dashboard
               </NavLink>
             )}
-            <NavLink href="/leaderboard" icon={<Trophy className="w-3.5 h-3.5" />}>
+            {/* <NavLink href="/leaderboard" icon={<Trophy className="w-3.5 h-3.5" />}>
               Leaderboard
-            </NavLink>
+            </NavLink> */}
           </nav>
 
           {/* Auth */}

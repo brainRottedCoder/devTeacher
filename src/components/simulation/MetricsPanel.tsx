@@ -43,10 +43,10 @@ export function MetricsPanel({
                         </span>
                     </div>
                     <div className="flex items-baseline gap-2">
-                        <span className="text-3xl font-bold text-gradient">
-                            {users.toLocaleString()}
+                        <span className="text-3xl font-bold text-gradient truncate max-w-[180px]">
+                            {formatUserNumber(users)}
                         </span>
-                        <span className="text-gray-400">users</span>
+                        <span className="text-gray-400 text-sm whitespace-nowrap">users</span>
                     </div>
                     <p className="text-sm text-gray-500 mt-1">
                         {requestsPerSecond.toFixed(1)} requests/second
@@ -339,4 +339,18 @@ function StatusBadge({ status }: { status: string }) {
             {status}
         </span>
     );
+}
+
+// Helper function to format large user numbers compactly
+function formatUserNumber(num: number): string {
+    if (num >= 100000000) {
+        return `${(num / 100000000).toFixed(1)}B`;
+    }
+    if (num >= 1000000) {
+        return `${(num / 1000000).toFixed(1)}M`;
+    }
+    if (num >= 1000) {
+        return `${(num / 1000).toFixed(1)}K`;
+    }
+    return num.toLocaleString();
 }

@@ -33,10 +33,17 @@ export default function SignupPage() {
       return;
     }
     try {
+      // Get the base URL for redirect
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+      
       const { error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { name } },
+        options: {
+          data: { name },
+          // Redirect to our custom confirmation page after email verification
+          emailRedirectTo: `${baseUrl}/auth/confirm`,
+        },
       });
       if (error) throw error;
       setSuccess(true);
