@@ -256,18 +256,29 @@ export function useInterviewSession() {
         interviewType?: string,
         difficulty?: string
     ) => {
-        const prompt = `
-Generate 3-5 interview questions for a ${interviewType} interview at a top tech company with ${difficulty} difficulty.
-
-Focus on real-world scenarios and practical knowledge.
-Return the questions as a numbered list.
-`;
+        const prompt = `Generate 3-5 interview questions for a ${interviewType} interview at a top tech company with ${difficulty} difficulty. Focus on real-world scenarios and practical knowledge. Return the questions as a numbered list.`;
 
         try {
+            // Get auth token for the AI chat API
+            const { createClient } = await import("@/lib/supabase/client");
+            const supabase = createClient();
+            const { data: { session: authSession } } = await supabase.auth.getSession();
+            const token = authSession?.access_token;
+
+            if (!token) {
+                return [
+                    "Tell me about a time when you had to make a technical decision under pressure.",
+                    "How would you design a scalable system for handling 1 million requests per second?",
+                    "Explain a complex technical concept to a non-technical person.",
+                    "Describe a project where you had to optimize performance."
+                ];
+            }
+
             const response = await fetch("/api/ai/chat", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`,
                 },
                 body: JSON.stringify({
                     message: prompt,

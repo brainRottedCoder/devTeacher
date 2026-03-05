@@ -75,11 +75,43 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: planError.message }, { status: 500 });
         }
 
-        // Create study plan items
+        // Calculate total questions needed: duration_weeks * 7 * questions_per_day
+        const totalQuestionsNeeded = (duration_weeks || 4) * 7 * (questions_per_day || 3);
+
+        // If question_ids are provided, use them; otherwise auto-generate
+        let selectedQuestionIds: string[] = [];
+        
         if (question_ids && question_ids.length > 0) {
-            const items = question_ids.map((question_id: string, index: number) => ({
+            selectedQuestionIds = question_ids;
+        } else {
+            // Auto-generate questions based on target company and available questions
+            let query = supabase
+                .from("interview_questions")
+                .select("id")
+                .limit(totalQuestionsNeeded);
+
+            // Filter by company if specified
+            if (target_company_id) {
+                query = query.eq("company_id", target_company_id);
+            }
+
+            const { data: availableQuestions, error: questionsError } = await query;
+
+            if (questionsError) {
+                console.error("Error fetching questions for auto-generation:", questionsError);
+                // Continue without questions if there's an error
+            } else if (availableQuestions && availableQuestions.length > 0) {
+                // Shuffle and select required number of questions
+                const shuffled = availableQuestions.sort(() => Math.random() - 0.5);
+                selectedQuestionIds = shuffled.slice(0, totalQuestionsNeeded).map((q: any) => q.id);
+            }
+        }
+
+        // Create study plan items
+        if (selectedQuestionIds.length > 0) {
+            const items = selectedQuestionIds.map((questionId: string, index: number) => ({
                 plan_id: plan.id,
-                question_id,
+                question_id: questionId,
                 day_number: Math.floor(index / (questions_per_day || 3)) + 1,
                 status: "pending"
             }));
@@ -95,7 +127,21 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        return NextResponse.json({ plan }, { status: 201 });
+        // Fetch the complete plan with items
+        const { data: completePlan } = await supabase
+            .from("study_plans")
+            .select(`
+                *,
+                company:companies(*),
+                items:study_plan_items(
+                    *,
+                    question:interview_questions(*)
+                )
+            `)
+            .eq("id", plan.id)
+            .single();
+
+        return NextResponse.json({ plan: completePlan }, { status: 201 });
     } catch (error: any) {
         console.error("Error creating study plan:", error);
         return NextResponse.json(

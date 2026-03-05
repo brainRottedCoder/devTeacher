@@ -274,15 +274,24 @@ function StudyPlanTab() {
 
     const fetchStats = async () => {
         try {
-            const response = await fetch('/api/leaderboard');
-            const data = await response.json();
-            // Just get user stats if available
-            if (data.leaderboard && data.leaderboard.length > 0) {
-                setStats({
-                    totalInterviews: data.leaderboard.length,
-                    avgScore: Math.round(data.leaderboard.reduce((acc: number, u: any) => acc + (u.score || 0), 0) / data.leaderboard.length)
-                });
+            // Fetch interview sessions instead of leaderboard for accurate stats
+            const sessionsResponse = await fetch('/api/interview/sessions');
+            const sessionsData = await sessionsResponse.json();
+            
+            let totalSessions = 0;
+            let totalScore = 0;
+            
+            if (sessionsData.sessions && Array.isArray(sessionsData.sessions)) {
+                totalSessions = sessionsData.sessions.length;
+                totalScore = sessionsData.sessions.reduce((acc: number, session: any) => {
+                    return acc + (session.overall_score || 0);
+                }, 0);
             }
+            
+            setStats({
+                totalInterviews: totalSessions,
+                avgScore: totalSessions > 0 ? Math.round(totalScore / totalSessions) : 0
+            });
         } catch (e) {
             console.error('Error fetching stats:', e);
         }
@@ -469,7 +478,8 @@ function CreatePlanModal({ onClose, onCreated }: { onClose: () => void; onCreate
         target_company_id: '',
         duration_weeks: 4,
         questions_per_day: 2,
-        question_ids: [] as string[]
+        question_ids: [] as string[],
+        auto_generate: true // Auto-generate questions by default
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { questions } = useQuestions({ limit: 50 });
@@ -479,10 +489,28 @@ function CreatePlanModal({ onClose, onCreated }: { onClose: () => void; onCreate
         setIsSubmitting(true);
 
         try {
+            // If auto_generate is true, don't pass question_ids to let server auto-generate
+            const payload = formData.auto_generate
+                ? {
+                    name: formData.name,
+                    description: formData.description,
+                    target_company_id: formData.target_company_id || null,
+                    duration_weeks: formData.duration_weeks,
+                    questions_per_day: formData.questions_per_day
+                }
+                : {
+                    name: formData.name,
+                    description: formData.description,
+                    target_company_id: formData.target_company_id || null,
+                    duration_weeks: formData.duration_weeks,
+                    questions_per_day: formData.questions_per_day,
+                    question_ids: formData.question_ids
+                };
+
             const response = await fetch('/api/interview/plans', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(payload)
             });
 
             if (response.ok) {
@@ -558,28 +586,49 @@ function CreatePlanModal({ onClose, onCreated }: { onClose: () => void; onCreate
                             />
                         </div>
                     </div>
-                    <div>
-                        <label className="block text-sm text-gray-400 mb-2">Select Questions</label>
-                        <div className="max-h-48 overflow-y-auto border border-white/10 rounded-xl p-2">
-                            {questions.map((q) => (
-                                <label key={q.id} className="flex items-center gap-2 p-2 hover:bg-white/5 rounded-lg cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={formData.question_ids.includes(q.id)}
-                                        onChange={(e) => {
-                                            if (e.target.checked) {
-                                                setFormData({ ...formData, question_ids: [...formData.question_ids, q.id] });
-                                            } else {
-                                                setFormData({ ...formData, question_ids: formData.question_ids.filter(id => id !== q.id) });
-                                            }
-                                        }}
-                                        className="w-4 h-4 rounded border-gray-600"
-                                    />
-                                    <span className="text-white text-sm truncate">{q.title}</span>
-                                </label>
-                            ))}
-                        </div>
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            id="auto_generate"
+                            checked={formData.auto_generate}
+                            onChange={(e) => setFormData({ ...formData, auto_generate: e.target.checked })}
+                            className="w-4 h-4 rounded border-gray-600 text-green-500"
+                        />
+                        <label htmlFor="auto_generate" className="text-sm text-gray-400">
+                            Auto-generate questions based on settings
+                        </label>
                     </div>
+                    {formData.auto_generate ? (
+                        <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                            <p className="text-sm text-blue-400">
+                                Questions will be automatically selected based on your target company and daily practice needs.
+                                Total: {formData.duration_weeks * 7 * formData.questions_per_day} questions
+                            </p>
+                        </div>
+                    ) : (
+                        <div>
+                            <label className="block text-sm text-gray-400 mb-2">Select Questions</label>
+                            <div className="max-h-48 overflow-y-auto border border-white/10 rounded-xl p-2">
+                                {questions.map((q) => (
+                                    <label key={q.id} className="flex items-center gap-2 p-2 hover:bg-white/5 rounded-lg cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={formData.question_ids.includes(q.id)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setFormData({ ...formData, question_ids: [...formData.question_ids, q.id] });
+                                                } else {
+                                                    setFormData({ ...formData, question_ids: formData.question_ids.filter(id => id !== q.id) });
+                                                }
+                                            }}
+                                            className="w-4 h-4 rounded border-gray-600"
+                                        />
+                                        <span className="text-white text-sm truncate">{q.title}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                     <div className="flex gap-4 pt-4">
                         <button
                             type="button"
