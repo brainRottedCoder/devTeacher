@@ -129,7 +129,7 @@ export default function LabsPage() {
     const [showExamples, setShowExamples] = useState(false);
     const [showYamlEditor, setShowYamlEditor] = useState(false);
     const [yamlInput, setYamlInput] = useState("");
-    const terminalEndRef = useRef<HTMLDivElement>(null);
+    const terminalContainerRef = useRef<HTMLDivElement>(null);
     
     const {
         state: k8sState,
@@ -143,7 +143,9 @@ export default function LabsPage() {
     } = useK8sLab();
 
     useEffect(() => {
-        terminalEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        if (terminalContainerRef.current) {
+            terminalContainerRef.current.scrollTop = terminalContainerRef.current.scrollHeight;
+        }
     }, [terminalOutput]);
 
     const selectedLab = LABS.find((l) => l.id === activeLab);
@@ -434,33 +436,34 @@ spec:
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="p-4 h-[450px] overflow-auto font-mono text-sm">
-                                            {terminalOutput.map((line, i) => (
-                                                <div key={i} className={line.startsWith("$") ? "text-green-400 mb-1" : "text-gray-300 mb-1"}>
-                                                    {line}
-                                                </div>
-                                            ))}
-                                            <div className="flex items-center gap-2 mt-2">
-                                                <span className="text-green-400">$</span>
-                                                <input
-                                                    type="text"
-                                                    value={terminalInput}
-                                                    onChange={(e) => setTerminalInput(e.target.value)}
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === "Enter") {
-                                                            e.preventDefault();
-                                                            if (terminalInput.trim()) {
-                                                                handleCommand(terminalInput.trim());
-                                                                setTerminalInput("");
+                                        <div ref={terminalContainerRef} className="p-4 h-[450px] overflow-auto font-mono text-sm flex flex-col">
+                                            <div className="flex-1">
+                                                {terminalOutput.map((line, i) => (
+                                                    <div key={i} className={line.startsWith("$") ? "text-green-400 mb-1 leading-relaxed" : "text-gray-300 mb-1 leading-relaxed"}>
+                                                        {line}
+                                                    </div>
+                                                ))}
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <span className="text-green-400 shrink-0">$</span>
+                                                    <input
+                                                        type="text"
+                                                        value={terminalInput}
+                                                        onChange={(e) => setTerminalInput(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === "Enter") {
+                                                                e.preventDefault();
+                                                                if (terminalInput.trim()) {
+                                                                    handleCommand(terminalInput.trim());
+                                                                    setTerminalInput("");
+                                                                }
                                                             }
-                                                        }
-                                                    }}
-                                                    className="flex-1 bg-transparent text-white outline-none font-mono text-sm"
-                                                    placeholder="Type a command..."
-                                                    autoFocus
-                                                />
+                                                        }}
+                                                        className="flex-1 bg-transparent text-white outline-none focus:outline-none focus:ring-0 border-0 p-0 font-mono text-sm min-w-0"
+                                                        placeholder="Type a command..."
+                                                        autoFocus
+                                                    />
+                                                </div>
                                             </div>
-                                            <div ref={terminalEndRef} />
                                         </div>
                                     </div>
 
