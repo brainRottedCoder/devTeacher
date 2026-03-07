@@ -2,8 +2,9 @@
 
 import { MainLayout } from "@/components/MainLayout";
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
 import {
     ArrowLeft,
     MessageSquare,
@@ -16,9 +17,12 @@ import {
     Pin,
     Flame,
     User,
+    Edit2,
+    Trash2,
 } from "lucide-react";
 import Link from "next/link";
-import { DISCUSSION_CATEGORIES } from "@/types/community.types";
+import { DISCUSSION_CATEGORIES, DiscussionCategory } from "@/types/community.types";
+import { useUpdateDiscussion, useDeleteDiscussion } from "@/hooks/useCommunity";
 
 interface Reply {
     id: string;
@@ -59,11 +63,23 @@ interface Discussion {
 
 export default function DiscussionDetailPage() {
     const params = useParams();
+    const router = useRouter();
     const discussionId = params.id as string;
     const queryClient = useQueryClient();
+    const { user } = useAuth();
+    
+    // Edit state
+    const [isEditing, setIsEditing] = useState(false);
+    const [editData, setEditData] = useState({ title: "", content: "", category: "general" as DiscussionCategory, tags: "" });
+
+    // Delete Modal State
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
 
     const [replyContent, setReplyContent] = useState("");
     const [replyingTo, setReplyingTo] = useState<string | null>(null);
+
+    const updateDiscussion = useUpdateDiscussion();
+    const deleteDiscussion = useDeleteDiscussion();
 
     const { data: discussion, isLoading } = useQuery<Discussion>({
         queryKey: ["discussion", discussionId],
@@ -110,6 +126,44 @@ export default function DiscussionDetailPage() {
     const handleReply = () => {
         if (!replyContent.trim()) return;
         createReply.mutate({ content: replyContent, parentId: replyingTo || undefined });
+    };
+
+    const handleEditStart = () => {
+        if (!discussion) return;
+        setEditData({
+            title: discussion.title,
+            content: discussion.content,
+            category: discussion.category as DiscussionCategory,
+            tags: discussion.tags.join(", ")
+        });
+        setIsEditing(true);
+    };
+
+    const handleEditSubmit = async () => {
+        if (!editData.title.trim() || !editData.content.trim()) return;
+        try {
+            await updateDiscussion.mutateAsync({
+                id: discussionId,
+                title: editData.title,
+                content: editData.content,
+                category: editData.category,
+                tags: editData.tags.split(",").map(t => t.trim()).filter(Boolean)
+            });
+            setIsEditing(false);
+        } catch (error: any) {
+            alert(error.message || "Failed to update discussion");
+        }
+    };
+
+    const handleDelete = async () => {
+        try {
+            await deleteDiscussion.mutateAsync(discussionId);
+            setShowDeleteModal(false);
+            router.push("/community");
+        } catch (error: any) {
+            alert(error.message || "Failed to delete discussion");
+            setShowDeleteModal(false);
+        }
     };
 
     if (isLoading) {
@@ -188,27 +242,98 @@ export default function DiscussionDetailPage() {
                             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-white font-medium">
                                 {discussion.user?.name?.[0]?.toUpperCase() || <User className="w-5 h-5" />}
                             </div>
-                            <div>
+                            <div className="flex-1">
                                 <div className="text-white font-medium">{discussion.user?.name || "Anonymous"}</div>
                                 <div className="text-xs text-gray-500 flex items-center gap-1">
                                     <Clock className="w-3 h-3" />
                                     {getTimeAgo(discussion.created_at)}
                                 </div>
                             </div>
+                            {user && user.id === discussion.user_id && (
+                                <div className="flex items-center gap-2">
+                                    <button 
+                                        onClick={handleEditStart}
+                                        className="p-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white rounded-lg transition-colors"
+                                        title="Edit Discussion"
+                                    >
+                                        <Edit2 className="w-4 h-4" />
+                                    </button>
+                                    <button 
+                                        onClick={() => setShowDeleteModal(true)}
+                                        className="p-2 bg-gray-800 hover:bg-red-900/40 text-gray-400 hover:text-red-400 rounded-lg transition-colors"
+                                        title="Delete Discussion"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
-                        <div className="prose prose-invert max-w-none">
-                            <p className="text-gray-300 whitespace-pre-wrap">{discussion.content}</p>
-                        </div>
-
-                        {discussion.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 mt-4">
-                                {discussion.tags.map((tag) => (
-                                    <span key={tag} className="px-2 py-0.5 text-xs rounded-full bg-gray-800 text-gray-400">
-                                        {tag}
-                                    </span>
-                                ))}
+                        {isEditing ? (
+                            <div className="mb-6 p-4 rounded-xl border border-violet-500/30 bg-gray-800/50">
+                                <input
+                                    type="text"
+                                    value={editData.title}
+                                    onChange={(e) => setEditData({ ...editData, title: e.target.value })}
+                                    className="w-full mb-3 px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white"
+                                    placeholder="Discussion Title"
+                                />
+                                <div className="flex gap-3 mb-3">
+                                    <select
+                                        value={editData.category}
+                                        onChange={(e) => setEditData({ ...editData, category: e.target.value as DiscussionCategory })}
+                                        className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
+                                    >
+                                        {DISCUSSION_CATEGORIES.map((cat) => (
+                                            <option key={cat.value} value={cat.value}>{cat.label}</option>
+                                        ))}
+                                    </select>
+                                    <input
+                                        type="text"
+                                        value={editData.tags}
+                                        onChange={(e) => setEditData({ ...editData, tags: e.target.value })}
+                                        className="flex-1 px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white"
+                                        placeholder="Tags (comma separated)"
+                                    />
+                                </div>
+                                <textarea
+                                    value={editData.content}
+                                    onChange={(e) => setEditData({ ...editData, content: e.target.value })}
+                                    className="w-full mb-3 px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white h-32 resize-none"
+                                    placeholder="Share your thoughts..."
+                                />
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        onClick={handleEditSubmit}
+                                        disabled={updateDiscussion.isPending}
+                                        className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg disabled:opacity-50 transition-colors"
+                                    >
+                                        {updateDiscussion.isPending ? "Saving..." : "Save Changes"}
+                                    </button>
+                                    <button
+                                        onClick={() => setIsEditing(false)}
+                                        className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
                             </div>
+                        ) : (
+                            <>
+                                <div className="prose prose-invert max-w-none">
+                                    <p className="text-gray-300 whitespace-pre-wrap">{discussion.content}</p>
+                                </div>
+
+                                {discussion.tags.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 mt-4">
+                                        {discussion.tags.map((tag) => (
+                                            <span key={tag} className="px-2 py-0.5 text-xs rounded-full bg-gray-800 text-gray-400">
+                                                {tag}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
 
@@ -265,6 +390,35 @@ export default function DiscussionDetailPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Custom Delete Modal */}
+            {showDeleteModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 w-full max-w-sm shadow-2xl">
+                        <h3 className="text-xl font-bold text-white mb-2">Delete Discussion</h3>
+                        <p className="text-gray-400 mb-6">
+                            Are you sure you want to delete this discussion? This action cannot be undone.
+                        </p>
+                        <div className="flex justify-end gap-3">
+                            <button
+                                onClick={() => setShowDeleteModal(false)}
+                                disabled={deleteDiscussion.isPending}
+                                className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleDelete}
+                                disabled={deleteDiscussion.isPending}
+                                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-500 disabled:opacity-50 rounded-lg transition-colors flex items-center gap-2"
+                            >
+                                {deleteDiscussion.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </MainLayout>
     );
 }

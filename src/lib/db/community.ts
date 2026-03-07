@@ -167,8 +167,9 @@ export const communityDb = {
             ...data,
             user: data.user ? {
                 ...data.user,
-                score: 0,
-                streak: 0,
+                name: data.user.display_name || data.user.full_name,
+                score: data.user.xp || 0,
+                streak: data.user.current_streak || 0,
             } : null,
         };
     },
@@ -197,10 +198,13 @@ export const communityDb = {
             })
             .select(`
                 *,
-                user:users (
+                user:profiles (
                     id,
-                    name,
-                    avatar_url
+                    display_name,
+                    full_name,
+                    avatar_url,
+                    xp,
+                    current_streak
                 )
             `)
             .single();
@@ -230,9 +234,10 @@ export const communityDb = {
             .from('design_comments')
             .select(`
                 *,
-                user:users (
+                user:profiles (
                     id,
-                    name,
+                    display_name,
+                    full_name,
                     avatar_url
                 )
             `)
@@ -272,9 +277,10 @@ export const communityDb = {
             })
             .select(`
                 *,
-                user:users (
+                user:profiles (
                     id,
-                    name,
+                    display_name,
+                    full_name,
                     avatar_url
                 )
             `)
@@ -298,7 +304,13 @@ export const communityDb = {
                 .eq('id', input.design_id);
         }
 
-        return comment;
+        return {
+            ...comment,
+            user: comment.user ? {
+                ...comment.user,
+                name: comment.user.display_name || comment.user.full_name
+            } : null
+        };
     },
 
     async getDiscussions(options: {
@@ -309,20 +321,26 @@ export const communityDb = {
         const supabase = getServerClient();
         const { category, limit = 20, offset = 0 } = options;
 
+        // Filter out empty categories
+        const validCategory = category && category.trim() !== '' ? category : undefined;
+
         let query = supabase
             .from('discussions')
             .select(`
                 *,
-                user:users (
+                user:profiles (
                     id,
-                    name,
-                    avatar_url
+                    display_name,
+                    full_name,
+                    avatar_url,
+                    xp,
+                    current_streak
                 )
             `)
             .range(offset, offset + limit - 1);
 
-        if (category) {
-            query = query.eq('category', category);
+        if (validCategory) {
+            query = query.eq('category', validCategory);
         }
 
         query = query
@@ -356,10 +374,13 @@ export const communityDb = {
             .from('discussions')
             .select(`
                 *,
-                user:users (
+                user:profiles (
                     id,
-                    name,
-                    avatar_url
+                    display_name,
+                    full_name,
+                    avatar_url,
+                    xp,
+                    current_streak
                 )
             `)
             .eq('id', id)
@@ -375,9 +396,10 @@ export const communityDb = {
             .from('discussion_replies')
             .select(`
                 *,
-                user:users (
+                user:profiles (
                     id,
-                    name,
+                    display_name,
+                    full_name,
                     avatar_url
                 )
             `)
@@ -422,10 +444,13 @@ export const communityDb = {
             })
             .select(`
                 *,
-                user:users (
+                user:profiles (
                     id,
-                    name,
-                    avatar_url
+                    display_name,
+                    full_name,
+                    avatar_url,
+                    xp,
+                    current_streak
                 )
             `)
             .single();
@@ -441,10 +466,77 @@ export const communityDb = {
             ...discussion,
             user: discussion.user ? {
                 ...discussion.user,
-                score: 0,
-                streak: 0,
+                name: discussion.user.display_name || discussion.user.full_name,
+                score: discussion.user.xp || 0,
+                streak: discussion.user.current_streak || 0,
             } : null,
         };
+    },
+
+    async updateDiscussion(id: string, userId: string, input: {
+        title?: string;
+        content?: string;
+        category?: string;
+        tags?: string[];
+    }): Promise<DiscussionWithUser | null> {
+        const supabase = getServerClient();
+
+        // Build update object
+        const updateData: any = { updated_at: new Date().toISOString() };
+        if (input.title !== undefined) updateData.title = input.title;
+        if (input.content !== undefined) updateData.content = input.content;
+        if (input.category !== undefined) updateData.category = input.category;
+        if (input.tags !== undefined) updateData.tags = input.tags;
+
+        const { data: discussion, error } = await supabase
+            .from('discussions')
+            .update(updateData)
+            .eq('id', id)
+            .eq('user_id', userId) // Ensure only the author can update
+            .select(`
+                *,
+                user:profiles (
+                    id,
+                    display_name,
+                    full_name,
+                    avatar_url,
+                    xp,
+                    current_streak
+                )
+            `)
+            .single();
+
+        if (error || !discussion) {
+            console.error('Error updating discussion:', error);
+            return null;
+        }
+
+        return {
+            ...discussion,
+            user: discussion.user ? {
+                ...discussion.user,
+                name: discussion.user.display_name || discussion.user.full_name,
+                score: discussion.user.xp || 0,
+                streak: discussion.user.current_streak || 0,
+            } : null,
+        };
+    },
+
+    async deleteDiscussion(id: string, userId: string): Promise<boolean> {
+        const supabase = getServerClient();
+
+        const { error } = await supabase
+            .from('discussions')
+            .delete()
+            .eq('id', id)
+            .eq('user_id', userId); // Ensure only the author can delete
+
+        if (error) {
+            console.error('Error deleting discussion:', error);
+            return false;
+        }
+
+        return true;
     },
 
     async createReply(input: {
@@ -465,9 +557,10 @@ export const communityDb = {
             })
             .select(`
                 *,
-                user:users (
+                user:profiles (
                     id,
-                    name,
+                    display_name,
+                    full_name,
                     avatar_url
                 )
             `)

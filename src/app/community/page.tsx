@@ -17,7 +17,7 @@ import {
     TrendingUp,
     Loader2,
 } from "lucide-react";
-import { DISCUSSION_CATEGORIES, DESIGN_DIFFICULTY_LABELS } from "@/types/community.types";
+import { DISCUSSION_CATEGORIES, DESIGN_DIFFICULTY_LABELS, DiscussionCategory } from "@/types/community.types";
 
 export default function CommunityPage() {
     const [activeTab, setActiveTab] = useState<"designs" | "discussions" | "leaderboard">("designs");
@@ -26,7 +26,10 @@ export default function CommunityPage() {
     const [showNewDiscussion, setShowNewDiscussion] = useState(false);
 
     const { designs, isLoading: loadingDesigns } = useSharedDesigns({ sortBy, limit: 20 });
-    const { discussions, isLoading: loadingDiscussions } = useDiscussions({ category: selectedCategory as any, limit: 20 });
+    const { discussions, isLoading: loadingDiscussions } = useDiscussions({ 
+        category: (selectedCategory || undefined) as DiscussionCategory | undefined, 
+        limit: 20 
+    });
     const { leaderboard, isLoading: loadingLeaderboard } = useLeaderboard('month');
     const { stats } = useCommunityStats();
     const createDiscussion = useCreateDiscussion();
@@ -42,15 +45,25 @@ export default function CommunityPage() {
     const handleCreateDiscussion = async () => {
         if (!newDiscussion.title || !newDiscussion.content) return;
         
-        await createDiscussion.mutateAsync({
-            title: newDiscussion.title,
-            content: newDiscussion.content,
-            category: newDiscussion.category,
-            tags: newDiscussion.tags.split(',').map(t => t.trim()).filter(Boolean),
-        });
-        
-        setNewDiscussion({ title: '', content: '', category: 'general', tags: '' });
-        setShowNewDiscussion(false);
+        try {
+            await createDiscussion.mutateAsync({
+                title: newDiscussion.title,
+                content: newDiscussion.content,
+                category: newDiscussion.category,
+                tags: newDiscussion.tags.split(',').map(t => t.trim()).filter(Boolean),
+            });
+            
+            setNewDiscussion({ title: '', content: '', category: 'general', tags: '' });
+            setShowNewDiscussion(false);
+        } catch (error: any) {
+            console.error('Failed to create discussion:', error);
+            // Show more specific error message
+            if (error.message?.includes('logged in')) {
+                alert('Please log in to create a discussion');
+            } else {
+                alert(error.message || 'Failed to create discussion. Please try again.');
+            }
+        }
     };
 
     const handleLike = async (type: 'design' | 'discussion' | 'reply', id: string) => {
@@ -195,15 +208,15 @@ export default function CommunityPage() {
                             <div className="flex items-center justify-between mb-4">
                                 <div className="flex items-center gap-2">
                                     <select
-                                        value={selectedCategory}
-                                        onChange={(e) => setSelectedCategory(e.target.value)}
-                                        className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white"
-                                    >
-                                        <option value="">All Categories</option>
-                                        {DISCUSSION_CATEGORIES.map((cat) => (
-                                            <option key={cat.value} value={cat.value}>{cat.icon} {cat.label}</option>
-                                        ))}
-                                    </select>
+                                    value={selectedCategory}
+                                    onChange={(e) => setSelectedCategory(e.target.value)}
+                                    className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white"
+                                >
+                                    <option value="">All Categories</option>
+                                    {DISCUSSION_CATEGORIES.map((cat) => (
+                                        <option key={cat.value} value={cat.value}>{cat.icon} {cat.label}</option>
+                                    ))}
+                                </select>
                                 </div>
                                 <button
                                     onClick={() => setShowNewDiscussion(true)}

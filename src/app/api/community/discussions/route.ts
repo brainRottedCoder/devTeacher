@@ -8,7 +8,11 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
 
     try {
-        const discussions = await communityDb.getDiscussions({ category, limit, offset });
+        const discussions = await communityDb.getDiscussions({ 
+            category: category && category.trim() !== '' ? category : undefined, 
+            limit, 
+            offset 
+        });
         return NextResponse.json(discussions);
     } catch (error) {
         console.error('Error fetching discussions:', error);

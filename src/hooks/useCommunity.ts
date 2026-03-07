@@ -7,6 +7,17 @@ import {
     LeaderboardEntry,
     DiscussionCategory,
 } from '@/types/community.types';
+import { createClient } from '@/lib/supabase/client';
+
+// Helper to get auth token
+async function getAuthHeader() {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+        return `Bearer ${session.access_token}`;
+    }
+    return null;
+}
 
 export function useSharedDesigns(options: { sortBy?: string; limit?: number } = {}) {
     const { sortBy = 'trending', limit = 20 } = options;
@@ -50,16 +61,28 @@ export function useShareDesign() {
             tags: string[];
             previewImage?: string;
         }) => {
+            const authHeader = await getAuthHeader();
+            if (!authHeader) {
+                throw new Error('You must be logged in to share a design');
+            }
+            
             const res = await fetch('/api/community/designs', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': authHeader
+                },
                 body: JSON.stringify(data),
             });
-            if (!res.ok) throw new Error('Failed to share design');
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.error || 'Failed to share design');
+            }
             return res.json() as Promise<SharedDesign>;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['shared-designs'] });
+            queryClient.invalidateQueries({ queryKey: ['community-stats'] });
         },
     });
 }
@@ -68,7 +91,7 @@ export function useDiscussions(options: { category?: DiscussionCategory; limit?:
     const { category, limit = 20 } = options;
 
     const { data: discussions, isLoading, error } = useQuery<Discussion[]>({
-        queryKey: ['discussions', category, limit],
+        queryKey: ['discussions', category ?? 'all', limit],
         queryFn: async () => {
             const params = new URLSearchParams();
             if (category) params.append('category', category);
@@ -107,16 +130,96 @@ export function useCreateDiscussion() {
             category: DiscussionCategory;
             tags: string[];
         }) => {
+            const authHeader = await getAuthHeader();
+            if (!authHeader) {
+                throw new Error('You must be logged in to create a discussion');
+            }
+            
             const res = await fetch('/api/community/discussions', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': authHeader
+                },
                 body: JSON.stringify(data),
             });
-            if (!res.ok) throw new Error('Failed to create discussion');
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.error || 'Failed to create discussion');
+            }
             return res.json() as Promise<Discussion>;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['discussions'] });
+            queryClient.invalidateQueries({ queryKey: ['community-stats'] });
+        },
+    });
+}
+
+export function useUpdateDiscussion() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async (data: {
+            id: string;
+            title?: string;
+            content?: string;
+            category?: DiscussionCategory;
+            tags?: string[];
+        }) => {
+            const authHeader = await getAuthHeader();
+            if (!authHeader) {
+                throw new Error('You must be logged in to update a discussion');
+            }
+            
+            const { id, ...updateData } = data;
+            
+            const res = await fetch(`/api/community/discussions/${id}`, {
+                method: 'PUT',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': authHeader
+                },
+                body: JSON.stringify(updateData),
+            });
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.error || 'Failed to update discussion');
+            }
+            return res.json() as Promise<Discussion>;
+        },
+        onSuccess: (_, variables) => {
+            queryClient.invalidateQueries({ queryKey: ['discussions'] });
+            queryClient.invalidateQueries({ queryKey: ['discussion', variables.id] });
+        },
+    });
+}
+
+export function useDeleteDiscussion() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async (id: string) => {
+            const authHeader = await getAuthHeader();
+            if (!authHeader) {
+                throw new Error('You must be logged in to delete a discussion');
+            }
+            
+            const res = await fetch(`/api/community/discussions/${id}`, {
+                method: 'DELETE',
+                headers: { 
+                    'Authorization': authHeader
+                },
+            });
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.error || 'Failed to delete discussion');
+            }
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['discussions'] });
+            queryClient.invalidateQueries({ queryKey: ['community-stats'] });
         },
     });
 }
@@ -126,9 +229,17 @@ export function useCreateReply() {
 
     return useMutation({
         mutationFn: async (data: { discussionId: string; content: string; parentId?: string }) => {
+            const authHeader = await getAuthHeader();
+            if (!authHeader) {
+                throw new Error('You must be logged in to reply');
+            }
+            
             const res = await fetch('/api/community/discussions/replies', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': authHeader
+                },
                 body: JSON.stringify(data),
             });
             if (!res.ok) throw new Error('Failed to create reply');
@@ -136,6 +247,7 @@ export function useCreateReply() {
         },
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ['discussion', variables.discussionId] });
+            queryClient.invalidateQueries({ queryKey: ['discussions'] });
         },
     });
 }
@@ -145,9 +257,17 @@ export function useCreateComment() {
 
     return useMutation({
         mutationFn: async (data: { designId: string; content: string; parentId?: string }) => {
+            const authHeader = await getAuthHeader();
+            if (!authHeader) {
+                throw new Error('You must be logged in to comment');
+            }
+            
             const res = await fetch('/api/community/comments', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': authHeader
+                },
                 body: JSON.stringify(data),
             });
             if (!res.ok) throw new Error('Failed to create comment');
@@ -155,6 +275,7 @@ export function useCreateComment() {
         },
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ['shared-design', variables.designId] });
+            queryClient.invalidateQueries({ queryKey: ['shared-designs'] });
         },
     });
 }
@@ -177,17 +298,27 @@ export function useLike() {
 
     return useMutation({
         mutationFn: async (data: { type: 'design' | 'discussion' | 'reply' | 'comment'; id: string }) => {
+            const authHeader = await getAuthHeader();
+            if (!authHeader) {
+                throw new Error('You must be logged in to like');
+            }
+            
             const res = await fetch('/api/community/like', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': authHeader
+                },
                 body: JSON.stringify(data),
             });
             if (!res.ok) throw new Error('Failed to like');
             return res.json() as Promise<{ liked: boolean; count: number }>;
         },
-        onSuccess: () => {
+        onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ['shared-designs'] });
             queryClient.invalidateQueries({ queryKey: ['discussions'] });
+            queryClient.invalidateQueries({ queryKey: ['shared-design', variables.id] });
+            queryClient.invalidateQueries({ queryKey: ['discussion', variables.id] });
         },
     });
 }
