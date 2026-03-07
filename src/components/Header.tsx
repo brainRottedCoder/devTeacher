@@ -52,9 +52,9 @@ export function Header() {
             <NavLink href="/design" icon={<BookOpen className="w-3.5 h-3.5" />}>
               Design
             </NavLink>
-            <NavLink href="/simulate" icon={<Code2 className="w-3.5 h-3.5" />}>
+            {/* <NavLink href="/simulate" icon={<Code2 className="w-3.5 h-3.5" />}>
               Simulator
-            </NavLink>
+            </NavLink> */}
             <NavLink href="/code" icon={<Terminal className="w-3.5 h-3.5" />}>
               Playground
             </NavLink>

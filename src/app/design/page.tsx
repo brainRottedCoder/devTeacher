@@ -91,7 +91,7 @@ function CollaboratorCursor({ x, y, name, color }: { x: number; y: number; name:
 function DesignStudio() {
     const reactFlowWrapper = useRef<HTMLDivElement>(null);
     const { screenToFlowPosition } = useReactFlow();
-    const { user } = useAuth();
+    const { user, session: authSession } = useAuth();
 
     const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
     const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -371,7 +371,10 @@ function DesignStudio() {
         try {
             const response = await fetch('/api/community/designs', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...(authSession?.access_token && { 'Authorization': `Bearer ${authSession.access_token}` })
+                },
                 body: JSON.stringify({
                     title: shareForm.title,
                     description: shareForm.description,

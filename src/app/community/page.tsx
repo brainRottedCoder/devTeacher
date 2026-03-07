@@ -141,10 +141,10 @@ export default function CommunityPage() {
                                         <option value="most_liked">Most Liked</option>
                                         <option value="most_discussed">Most Discussed</option>
                                     </select>
-                                    <button className="flex items-center gap-2 px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-colors">
+                                    <Link href="/design" className="flex items-center gap-2 px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-colors">
                                         <Plus className="w-4 h-4" />
                                         Share Design
-                                    </button>
+                                    </Link>
                                 </div>
                             </div>
 
