@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { MainLayout } from "@/components/MainLayout";
-import { FiActivity, FiDatabase, FiTrendingUp } from "react-icons/fi";
+import { Activity, Database, TrendingUp } from "lucide-react";
 
 export default function TokenUsagePage() {
     const [usageStats, setUsageStats] = useState<any>(null);
@@ -50,7 +50,7 @@ export default function TokenUsagePage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 font-poppins">
                     <div className="glass-panel p-6 rounded-xl relative overflow-hidden group">
                         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <FiActivity size={64} />
+                            <Activity size={64} />
                         </div>
                         <h3 className="text-gray-400 font-medium mb-1">Total Tokens</h3>
                         <p className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-500">
@@ -60,7 +60,7 @@ export default function TokenUsagePage() {
 
                     <div className="glass-panel p-6 rounded-xl relative overflow-hidden group">
                         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <FiTrendingUp size={64} />
+                            <TrendingUp size={64} />
                         </div>
                         <h3 className="text-gray-400 font-medium mb-1">Input Tokens (Prompt)</h3>
                         <p className="text-4xl font-bold text-green-400">
@@ -70,7 +70,7 @@ export default function TokenUsagePage() {
 
                     <div className="glass-panel p-6 rounded-xl relative overflow-hidden group">
                         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <FiDatabase size={64} />
+                            <Database size={64} />
                         </div>
                         <h3 className="text-gray-400 font-medium mb-1">Output Tokens (Completion)</h3>
                         <p className="text-4xl font-bold text-purple-400">
