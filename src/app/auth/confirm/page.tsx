@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { MainLayout } from "@/components/MainLayout";
-import { CheckCircle2, XCircle, Loader2, LogIn, ArrowRight } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, ArrowRight } from "lucide-react";
 
 type VerificationStatus = "loading" | "success" | "error";
 
@@ -142,19 +142,12 @@ function EmailConfirmationContent() {
         </div>
         <h2 className="text-2xl font-bold text-white mb-3">Email Verified Successfully!</h2>
         <p className="text-gray-400 mb-8">
-          Your email has been confirmed. You can now log in to your account and start using all features of Azmuth.
+          Your email has been confirmed. You can now start using all features of Azmuth.
         </p>
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <button
-            onClick={handleGoToLogin}
-            className="px-6 py-3 rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-500 transition-colors flex items-center justify-center gap-2"
-          >
-            <LogIn className="w-4 h-4" />
-            Login Now
-          </button>
+        <div className="flex justify-center">
           <button
             onClick={handleGoHome}
-            className="px-6 py-3 rounded-xl bg-gray-800 text-white font-medium hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
+            className="px-6 py-3 rounded-xl bg-violet-600 text-white font-medium hover:bg-violet-500 transition-colors flex items-center justify-center gap-2"
           >
             Explore Features <ArrowRight className="w-4 h-4" />
           </button>

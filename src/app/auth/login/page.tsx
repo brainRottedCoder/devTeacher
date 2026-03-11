@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Terminal, Zap, Brain, Shield, Loader2 } from "lucide-react";
@@ -9,27 +8,8 @@ import { Terminal, Zap, Brain, Shield, Loader2 } from "lucide-react";
 const supabase = createClient();
 
 export default function LoginPage() {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-      router.push("/dashboard");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
@@ -48,7 +28,6 @@ export default function LoginPage() {
       setGoogleLoading(false);
     }
   };
-
 
   return (
     <div className="min-h-screen flex relative overflow-hidden bg-surface-deep noise-overlay">
@@ -77,21 +56,6 @@ export default function LoginPage() {
             <FeatureRow icon={<Brain className="w-5 h-5 text-accent-violet" />} bg="bg-accent-violet/10" title="AI-Powered Learning" desc='Personalized tutoring that explains the "why"' />
             <FeatureRow icon={<Shield className="w-5 h-5 text-accent-rose" />} bg="bg-accent-rose/10" title="Interview Prep" desc="Company-specific preparation with AI mock interviews" />
           </div>
-
-          {/* <div className="mt-14 flex gap-10">
-            <div>
-              <div className="text-2xl font-heading font-bold text-gradient">10K+</div>
-              <div className="text-slate-600 text-xs">Active Learners</div>
-            </div>
-            <div>
-              <div className="text-2xl font-heading font-bold text-gradient">500+</div>
-              <div className="text-slate-600 text-xs">Lessons</div>
-            </div>
-            <div>
-              <div className="text-2xl font-heading font-bold text-gradient">50+</div>
-              <div className="text-slate-600 text-xs">Simulations</div>
-            </div>
-          </div> */}
         </div>
       </div>
 
@@ -122,7 +86,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={handleGoogleLogin}
-              disabled={googleLoading || loading}
+              disabled={googleLoading}
               className="w-full flex items-center justify-center gap-3 px-4 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white text-sm font-medium hover:bg-white/10 hover:border-white/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {googleLoading ? (
@@ -137,36 +101,6 @@ export default function LoginPage() {
               )}
               Continue with Google
             </button>
-
-            {/* Divider */}
-            <div className="relative flex items-center gap-3 my-1">
-              <div className="flex-1 h-px bg-white/8" />
-              <span className="text-[11px] text-slate-600 font-medium">or continue with email</span>
-              <div className="flex-1 h-px bg-white/8" />
-            </div>
-
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5">Email</label>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="input-field" placeholder="you@example.com" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1.5">Password</label>
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="input-field" placeholder="Enter your password" />
-              </div>
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" className="w-3.5 h-3.5 rounded border-white/10 bg-white/5 text-accent-violet focus:ring-accent-violet/50" />
-                  <span className="text-xs text-slate-500">Remember me</span>
-                </label>
-                <Link href="/auth/forgot-password" className="text-xs text-accent-violet hover:text-accent-violet/80 transition-colors">
-                  Forgot password?
-                </Link>
-              </div>
-              <button type="submit" disabled={loading} className="btn-primary w-full justify-center disabled:opacity-50 disabled:cursor-not-allowed">
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Sign in</span>}
-              </button>
-            </form>
 
             <p className="mt-6 text-center text-slate-500 text-xs">
               Don&apos;t have an account?{" "}
@@ -192,6 +126,7 @@ function FeatureRow({ icon, bg, title, desc }: { icon: React.ReactNode; bg: stri
     </div>
   );
 }
+
 
 
 
