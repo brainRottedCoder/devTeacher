@@ -18,7 +18,7 @@ const nextConfig = {
       'megallm',
     ],
   },
-  output: 'standalone',
 };
 
 export default nextConfig;
+
