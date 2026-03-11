@@ -18,7 +18,6 @@ function EmailConfirmationContent() {
 
   useEffect(() => {
     const handleEmailConfirmation = async () => {
-      const tokenHash = searchParams.get("hash") || searchParams.get("token");
       const errorCode = searchParams.get("error_code");
       const errorDescription = searchParams.get("error_description");
 
@@ -28,9 +27,14 @@ function EmailConfirmationContent() {
         return;
       }
 
+      // PKCE flow: Supabase sends `token_hash` and `type` as query params
+      const tokenHash = searchParams.get("token_hash");
+      const type = (searchParams.get("type") as "signup" | "email" | "recovery" | "invite") || "signup";
+
       if (tokenHash) {
         try {
-          const { data, error } = await supabase.auth.getSession();
+          // verifyOtp actually redeems the token and creates a session
+          const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
           if (error) throw error;
 
           if (data.session) {
@@ -39,38 +43,42 @@ function EmailConfirmationContent() {
             setStatus("error");
             setErrorMessage("The verification link has expired or is invalid. Please request a new confirmation email.");
           }
-        } catch (err) {
+        } catch (err: any) {
           console.error("Verification error:", err);
           setStatus("error");
-          setErrorMessage("An error occurred during verification. Please try again.");
+          setErrorMessage(err?.message || "An error occurred during verification. Please try again.");
         }
-      } else {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          setStatus("success");
-        } else {
-          if (typeof window !== "undefined" && window.location.hash) {
-            const hashParams = new URLSearchParams(window.location.hash.substring(1));
-            const accessToken = hashParams.get("access_token");
-            const refreshToken = hashParams.get("refresh_token");
+        return;
+      }
 
-            if (accessToken && refreshToken) {
-              const { error } = await supabase.auth.setSession({
-                access_token: accessToken,
-                refresh_token: refreshToken,
-              });
+      // Implicit flow fallback: token is in the URL hash fragment (#access_token=...&refresh_token=...)
+      if (typeof window !== "undefined" && window.location.hash) {
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const accessToken = hashParams.get("access_token");
+        const refreshToken = hashParams.get("refresh_token");
 
-              if (!error) {
-                setStatus("success");
-                return;
-              }
-            }
+        if (accessToken && refreshToken) {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (!error) {
+            setStatus("success");
+            return;
           }
-
-          setStatus("error");
-          setErrorMessage("Invalid verification link. Please request a new confirmation email.");
         }
       }
+
+      // Check if there's already a valid session (e.g. user re-visited the page)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setStatus("success");
+        return;
+      }
+
+      setStatus("error");
+      setErrorMessage("Invalid verification link. Please request a new confirmation email.");
     };
 
     handleEmailConfirmation();
