@@ -11,10 +11,10 @@
  * - Learning content caching
  */
 
-const CACHE_NAME = 'sudomakeworld-v6';
-const STATIC_CACHE = 'sudomakeworld-static-v6';
-const DYNAMIC_CACHE = 'sudomakeworld-dynamic-v6';
-const OFFLINE_QUEUE = 'sudomakeworld-offline-queue-v6';
+const CACHE_NAME = 'sudomakeworld-v7';
+const STATIC_CACHE = 'sudomakeworld-static-v7';
+const DYNAMIC_CACHE = 'sudomakeworld-dynamic-v7';
+const OFFLINE_QUEUE = 'sudomakeworld-offline-queue-v7';
 
 // IndexedDB configuration for service worker
 const DB_NAME = 'sudomakeworld';
@@ -81,7 +81,7 @@ self.addEventListener('activate', (event) => {
         caches.keys().then((keys) => {
             return Promise.all(
                 keys
-                    .filter((key) => !key.includes('v6'))
+                    .filter((key) => !key.includes('v7'))
                     .map((key) => {
                         console.log('[SW] Deleting old cache:', key);
                         return caches.delete(key);
@@ -90,6 +90,13 @@ self.addEventListener('activate', (event) => {
         }).then(() => {
             console.log('[SW] Claiming clients');
             return self.clients.claim();
+        }).then(() => {
+            // Notify all clients to reload so new CSS chunks are picked up
+            return self.clients.matchAll().then((clients) => {
+                clients.forEach((client) => {
+                    client.postMessage({ type: 'sw-activated', version: CACHE_NAME });
+                });
+            });
         })
     );
     console.log('[SW] Activated');
@@ -177,8 +184,10 @@ self.addEventListener('fetch', (event) => {
         url.pathname.startsWith('/static/') ||
         url.pathname.startsWith('/fonts/') ||
         url.pathname.startsWith('/icons/')) {
-        // Use networkFirst for Next.js chunks to avoid stale cache after recompilation
-        event.respondWith(networkFirst(request));
+        // Use cacheFirst for immutable static assets (CSS/JS chunks have content hashes)
+        // This prevents CSS loading failures on slow/offline networks
+        // Cache is updated in background via updateCacheInBackground inside cacheFirst
+        event.respondWith(cacheFirst(request));
         return;
     }
 
@@ -321,11 +330,17 @@ async function cacheFirst(request) {
         }
         return response;
     } catch (error) {
-        // Don't fail for missing chunks - return a placeholder response
-        if (request.url.includes('/_next/static/chunks/')) {
-            console.log('[SW] Chunk not found, skipping cache:', request.url);
-            // Return an empty response for missing chunks to prevent errors
-            return new Response('', { status: 404, statusText: 'Not Found' });
+        // Don't fail for missing static assets (chunks, CSS) - return empty to prevent page breakage
+        if (request.url.includes('/_next/static/')) {
+            console.log('[SW] Static asset not found, returning empty:', request.url);
+            const contentType = request.url.endsWith('.css') ? 'text/css' : 
+                               request.url.endsWith('.js') ? 'application/javascript' : 
+                               'application/octet-stream';
+            return new Response('', { 
+                status: 404, 
+                statusText: 'Not Found',
+                headers: { 'Content-Type': contentType }
+            });
         }
         return createOfflineResponse(request);
     }
