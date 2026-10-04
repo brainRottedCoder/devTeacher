@@ -2,6 +2,7 @@
   "name": "azmuth",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "AI-powered developer learning platform - Named after Azmuth, the great scientist from Ben10",
   "scripts": {
     "dev": "concurrently --names next,ws --prefix-colors blue,green \"npm run dev:next\" \"npm run dev:ws\"",
